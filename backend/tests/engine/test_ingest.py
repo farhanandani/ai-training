@@ -110,16 +110,41 @@ def test_derive_withdrawal_and_replenishment():
 
 def test_derive_uses_same_weekday_median():
     hdr = "tid,date,opening_balance,closing_balance"
+    # 03-01..03-09 withdrawals: 03-02 (Mon) and 03-09 (Mon) = 40, all other days = 10.
+    # Jump on 03-16 (Mon): same-weekday prior values {40, 40} -> median 40,
+    # while the median of all prior days is 10.
     rows = []
-    bal = 900
-    for k in range(9):  # 03-01 .. 03-09: withdrawal 10 on 03-01 and 03-08, else 5
-        w = 10 if k in (0, 7) else 5
-        rows.append(f"A,{date(2026, 3, 1 + k)},{bal},{bal - w}")
+    bal = 1000
+    for k in range(1, 16):
+        w = 40 if k in (2, 9) else 10
+        rows.append(f"A,{date(2026, 3, k)},{bal},{bal - w}")
         bal -= w
-    rows.append(f"A,2026-03-10,{bal},{bal + 500}")  # jump; same weekday 03-03 had w=5
+    rows.append(f"A,2026-03-16,{bal},{bal + 500}")
     df, _ = read_table(csv_bytes(rows, hdr=hdr), "a.csv", "log", capacities={"A": 1000})
     last = df.iloc[-1]
-    assert last.withdrawal == 5 and last.replenishment == 505
+    assert last.withdrawal == 40 and last.replenishment == 540
+
+
+def test_single_group_thousand_separator_is_bad_amount():
+    df, issues = log(["A,2026-03-01,250.000,0,0,5", "A,2026-03-02,5,0,0,5", "A,2026-03-03,12.5,0,0,5"])
+    assert list(df["date"]) == [date(2026, 3, 2), date(2026, 3, 3)]
+    bad = [i for i in issues if i.code == "BAD_AMOUNT"]
+    assert len(bad) == 1 and bad[0].severity == "error"
+
+
+def test_partial_derivation_keeps_uploaded_column():
+    hdr = "tid,date,opening_balance,withdrawal,closing_balance"
+    rows = ["A,2026-03-01,1000,100,900", "A,2026-03-02,900,100,1500"]
+    df, _ = read_table(csv_bytes(rows, hdr=hdr), "a.csv", "log")
+    assert list(df["withdrawal"]) == [100, 100]
+    assert list(df["replenishment"]) == [0, 700]
+    assert (df["source"] == "derived").all()
+    hdr = "tid,date,opening_balance,replenishment,closing_balance"
+    rows = ["A,2026-03-01,1000,0,900", "A,2026-03-02,900,700,1500"]
+    df, _ = read_table(csv_bytes(rows, hdr=hdr), "a.csv", "log")
+    assert list(df["replenishment"]) == [0, 700]
+    assert list(df["withdrawal"]) == [100, 100]
+    assert (df["source"] == "derived").all()
 
 
 def test_xlsx_first_sheet():

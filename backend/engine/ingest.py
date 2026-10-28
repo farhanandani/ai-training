@@ -62,6 +62,8 @@ LOG_REQUIRED = ["tid", "date", "opening_balance", "closing_balance"]
 LOG_AMOUNTS = ["opening_balance", "withdrawal", "replenishment", "closing_balance"]
 
 _AMOUNT_RE = re.compile(r"^\s*(Rp)?\s*-?\d+(\.\d+)?\s*$", re.IGNORECASE)
+# id-ID thousand grouping (one or more groups of 3), e.g. 1.000 or 250.000.000: ambiguous, never guessed.
+_THOUSAND_RE = re.compile(r"^\s*(Rp)?\s*-?\d{1,3}(\.\d{3})+\s*$", re.IGNORECASE)
 _ISO_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 _DMY_RE = re.compile(r"^(\d{2})[/-](\d{2})[/-](\d{4})$")
 
@@ -125,10 +127,27 @@ def _parse_amount(v: Any) -> int | None:
         if isinstance(v, float) and math.isnan(v):
             return None
         return int(Decimal(str(v)).quantize(Decimal(1), rounding=ROUND_HALF_UP))
-    if not isinstance(v, str) or not _AMOUNT_RE.match(v):
+    # if not isinstance(v, str) or not _AMOUNT_RE.match(v):
+    if not isinstance(v, str) or not _AMOUNT_RE.match(v) or _THOUSAND_RE.match(v):
         return None
     num = re.sub(r"(?i)rp|\s", "", v)
     return int(Decimal(num).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+
+def _parse_amount_cols(r, cols, cell, issues: list[Issue], tid: str, d: date | None = None):
+    """Parse the named amount columns of one row; return {col: int} or None after recording the issue."""
+    rec: dict[str, int] = {}
+    for c in cols:
+        raw = cell(r, c)
+        v = None if _is_blank(raw) else _parse_amount(raw)
+        if v is None:
+            issues.append(Issue("error", "BAD_AMOUNT", f"Unparseable amount {raw!r} in {c}", tid, d))
+            return None
+        if v < 0:
+            issues.append(Issue("error", "NEGATIVE_VALUE", f"Negative value in {c}", tid, d))
+            return None
+        rec[c] = v
+    return rec
 
 
 def _is_blank(v: Any) -> bool:
@@ -197,22 +216,9 @@ def _read_log(body, idx, cell, issues: list[Issue]) -> pd.DataFrame:
         if not tid:
             issues.append(Issue("error", "BAD_TID", "Missing tid", None, d))
             continue
-        rec: dict[str, Any] = {"tid": tid, "date": d}
-        ok = True
-        for c in amount_cols:
-            raw = cell(r, c)
-            v = None if _is_blank(raw) else _parse_amount(raw)
-            if v is None:
-                issues.append(Issue("error", "BAD_AMOUNT", f"Unparseable amount {raw!r} in {c}", tid, d))
-                ok = False
-                break
-            if v < 0:
-                issues.append(Issue("error", "NEGATIVE_VALUE", f"Negative value in {c}", tid, d))
-                ok = False
-                break
-            rec[c] = v
-        if ok:
-            out.append(rec)
+        amounts = _parse_amount_cols(r, amount_cols, cell, issues, tid, d)
+        if amounts is not None:
+            out.append({"tid": tid, "date": d, **amounts})
     return pd.DataFrame(out, columns=["tid", "date", *amount_cols])
 
 
@@ -232,9 +238,17 @@ def _aggregate(df: pd.DataFrame, issues: list[Issue]) -> pd.DataFrame:
 
 
 def _finish_log(df, issues, frac, capacities):
-    derive = "withdrawal" not in df.columns or "replenishment" not in df.columns
-    if derive:
+    # derive = "withdrawal" not in df.columns or "replenishment" not in df.columns
+    has_w, has_r = "withdrawal" in df.columns, "replenishment" in df.columns
+    derive = not (has_w and has_r)
+    if not has_w and not has_r:
         df = _derive(df, frac, capacities)
+    elif not has_r:
+        df = df.copy()
+        df["replenishment"] = (df["closing_balance"] - df["opening_balance"] + df["withdrawal"]).clip(lower=0)
+    elif not has_w:
+        df = df.copy()
+        df["withdrawal"] = df["opening_balance"] + df["replenishment"] - df["closing_balance"]
     df = df.copy()
     df["source"] = "derived" if derive else "upload"
     df = df[[*LOG_COLS, "source"]].sort_values(["tid", "date"]).reset_index(drop=True)
@@ -284,22 +298,10 @@ def _read_master(body, cell, issues: list[Issue]) -> pd.DataFrame:
         if not tid:
             issues.append(Issue("error", "BAD_TID", "Missing tid"))
             continue
-        rec: dict[str, Any] = {"tid": tid}
-        ok = True
-        for c in MASTER_INT:
-            raw = cell(r, c)
-            v = None if _is_blank(raw) else _parse_amount(raw)
-            if v is None:
-                issues.append(Issue("error", "BAD_AMOUNT", f"Unparseable value {raw!r} in {c}", tid))
-                ok = False
-                break
-            if v < 0:
-                issues.append(Issue("error", "NEGATIVE_VALUE", f"Negative value in {c}", tid))
-                ok = False
-                break
-            rec[c] = v
-        if not ok:
+        amounts = _parse_amount_cols(r, MASTER_INT, cell, issues, tid)
+        if amounts is None:
             continue
+        rec: dict[str, Any] = {"tid": tid, **amounts}
         for c, default in (("location_name", tid), ("location_type", "unknown")):
             raw = cell(r, c)
             rec[c] = default if _is_blank(raw) else str(raw).strip()
