@@ -344,6 +344,39 @@ class Store:
             )
             self._bump()
 
+    def replace_overrides(self, start: date, end: date, items: list[Override]) -> None:
+        """Replace every override whose visit_date or moved_from lies in (start, end] with `items` (F2/F3).
+
+        No-op rows (no amount, not skipped, not moved) are dropped; moved_from == visit_date is not a move."""
+        rows = []
+        for o in items:
+            moved = o.moved_from if o.moved_from != o.visit_date else None
+            if o.amount is None and not o.skipped and moved is None:
+                continue
+            rows.append(
+                (
+                    o.tid,
+                    _iso(o.visit_date),
+                    None if o.amount is None else int(o.amount),
+                    int(bool(o.skipped)),
+                    _iso(moved),
+                )
+            )
+        s, e = _iso(start), _iso(end)
+        with self._tx() as c:
+            c.execute(
+                "DELETE FROM overrides WHERE (visit_date > ? AND visit_date <= ?) "
+                "OR (moved_from IS NOT NULL AND moved_from > ? AND moved_from <= ?)",
+                (s, e, s, e),
+            )
+            c.executemany(
+                "INSERT INTO overrides(tid, visit_date, amount, skipped, moved_from) VALUES (?,?,?,?,?) "
+                "ON CONFLICT(tid, visit_date) DO UPDATE SET amount=excluded.amount, "
+                "skipped=excluded.skipped, moved_from=excluded.moved_from",
+                rows,
+            )
+            self._bump()
+
     def clear_overrides(self) -> None:
         with self._tx() as c:
             c.execute("DELETE FROM overrides")

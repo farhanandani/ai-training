@@ -827,6 +827,13 @@ export interface components {
     };
     /** OverridesRequest */
     OverridesRequest: {
+      /**
+       * As Of
+       * Format: date
+       */
+      as_of: string;
+      /** H */
+      h: number;
       /** Overrides */
       overrides: components["schemas"]["OverrideDto"][];
     };

@@ -3,6 +3,7 @@
 import csv
 import io
 import time
+from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +11,7 @@ from test_services import AS_OF
 
 from app.main import create_app
 from app.settings import Settings
+from engine.schema import Override
 
 BODY = {"as_of": AS_OF.isoformat(), "h": 21, "sl": "p90", "budget": None}
 Q = f"as_of={AS_OF.isoformat()}&h=21&sl=p90"
@@ -65,15 +67,18 @@ def test_override_applied_then_cleared(client):
     base = _warm(client)
     v0 = next(v for v in base["visits"] if v["tid"] == TID)
     ov = {"tid": TID, "visit_date": v0["date"], "amount": 123_000_000}
-    assert client.put("/api/plan/overrides", json={"overrides": [ov]}).json() == {"ok": True}
+    # assert client.put("/api/plan/overrides", json={"overrides": [ov]}).json() == {"ok": True}
+    assert client.put("/api/plan/overrides", json={**WIN, "overrides": [ov]}).json() == {"ok": True}
     v = next(
         v
         for v in client.post("/api/plan", json=BODY).json()["visits"]
         if v["tid"] == TID and v["date"] == v0["date"]
     )
     assert v["manual"] is True and v["override"]["amount"] == 123_000_000
-    # upsert: same key replaced, others untouched
-    client.put("/api/plan/overrides", json={"overrides": [{**ov, "amount": 5_000_000}]})
+    # # upsert: same key replaced, others untouched
+    # replace: the window's set is replaced by the new one
+    # client.put("/api/plan/overrides", json={"overrides": [{**ov, "amount": 5_000_000}]})
+    client.put("/api/plan/overrides", json={**WIN, "overrides": [{**ov, "amount": 5_000_000}]})
     assert [o.amount for o in client.app.state.store.get_overrides()] == [5_000_000]
     assert client.delete("/api/plan/overrides").json() == {"ok": True}
     assert client.app.state.store.get_overrides() == []
@@ -87,13 +92,22 @@ def test_override_applied_then_cleared(client):
 
 def test_override_validation(client):
     _warm(client)
+    # r = client.put(
+    #     "/api/plan/overrides", json={"overrides": [{"tid": "TID-NOPE", "visit_date": "2026-03-10"}]}
+    # )
     r = client.put(
-        "/api/plan/overrides", json={"overrides": [{"tid": "TID-NOPE", "visit_date": "2026-03-10"}]}
+        "/api/plan/overrides", json={**WIN, "overrides": [{"tid": "TID-NOPE", "visit_date": "2026-03-10"}]}
     )
     assert r.status_code == 404 and r.json()["error"]["code"] == "UNKNOWN_TID"
+    # r = client.put(
+    #     "/api/plan/overrides", json={"overrides": [{"tid": TID, "visit_date": "2026-03-10", "amount": -5}]}
+    # )
     r = client.put(
-        "/api/plan/overrides", json={"overrides": [{"tid": TID, "visit_date": "2026-03-10", "amount": -5}]}
+        "/api/plan/overrides",
+        json={**WIN, "overrides": [{"tid": TID, "visit_date": "2026-03-10", "amount": -5}]},
     )
+    assert r.status_code == 400 and r.json()["error"]["code"] == "BAD_PARAMS"
+    r = client.put("/api/plan/overrides", json={"overrides": []})  # the plan window is required
     assert r.status_code == 400 and r.json()["error"]["code"] == "BAD_PARAMS"
     assert client.app.state.store.get_overrides() == []
 
@@ -103,7 +117,8 @@ def test_export_csv_header_and_rows(client):
     v0 = next(v for v in b["visits"] if v["tid"] == TID)
     client.put(
         "/api/plan/overrides",
-        json={"overrides": [{"tid": TID, "visit_date": v0["date"], "amount": 123_000_000}]},
+        # json={"overrides": [{"tid": TID, "visit_date": v0["date"], "amount": 123_000_000}]},
+        json={**WIN, "overrides": [{"tid": TID, "visit_date": v0["date"], "amount": 123_000_000}]},
     )
     r = client.get(f"/api/plan/export.csv?{Q}")
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
@@ -126,3 +141,75 @@ def test_plan_latency(client):
     t = time.perf_counter()
     assert client.post("/api/plan", json=BODY).status_code == 200
     assert time.perf_counter() - t <= 0.3
+
+
+WIN = {"as_of": AS_OF.isoformat(), "h": 21}
+
+
+def _visits(client, tid=TID):
+    return [v for v in client.post("/api/plan", json=BODY).json()["visits"] if v["tid"] == tid]
+
+
+def _put(client, overrides):
+    r = client.put("/api/plan/overrides", json={**WIN, "overrides": overrides})
+    assert r.status_code == 200, r.text
+    return r
+
+
+def test_override_unskip_clears_the_skip(client):
+    # F2: the frontend sends the complete desired set; an un-skipped row is no longer in it.
+    _warm(client)
+    v0 = next(v for v in _visits(client) if "skip" not in v["flags"])
+    _put(client, [{"tid": TID, "visit_date": v0["date"], "skipped": True}])
+    v = next(v for v in _visits(client) if v["date"] == v0["date"])
+    assert "skip" in v["flags"] and v["override"]["skipped"] is True
+    _put(client, [])
+    v = next(v for v in _visits(client) if v["date"] == v0["date"])
+    assert "skip" not in v["flags"] and v["override"] is None and v["manual"] is False
+    assert client.app.state.store.get_overrides() == []
+    # a no-op row (no amount, not skipped, not moved) is dropped too
+    _put(client, [{"tid": TID, "visit_date": v0["date"], "skipped": False}])
+    assert client.app.state.store.get_overrides() == []
+
+
+def test_override_move_twice_leaves_one_moved_visit(client):
+    # F3: moving a visit twice must not leave the first move's row behind (phantom Rp 0 'Manual visit').
+    _warm(client)
+    before = _visits(client)
+    v0 = next(v for v in before if "skip" not in v["flags"])
+    d0 = date.fromisoformat(v0["date"])
+    taken = {v["date"] for v in before}
+    d1, d2 = [d for d in (d0 + timedelta(days=k) for k in range(1, 20)) if d.isoformat() not in taken][:2]
+    _put(client, [{"tid": TID, "visit_date": d1.isoformat(), "moved_from": d0.isoformat()}])
+    _put(client, [{"tid": TID, "visit_date": d2.isoformat(), "moved_from": d0.isoformat()}])
+    after = _visits(client)
+    assert len(after) == len(before)
+    moved = [v for v in after if v["manual"]]
+    assert [(v["date"], v["kind"]) for v in moved] == [(d2.isoformat(), "moved")]
+    assert not any(v["reason"] == "Manual visit" for v in after)
+    assert len(client.app.state.store.get_overrides()) == 1
+
+
+def test_override_move_back_to_original_leaves_no_override(client):
+    _warm(client)
+    before = _visits(client)
+    v0 = next(v for v in before if "skip" not in v["flags"])
+    d0 = date.fromisoformat(v0["date"])
+    d1 = next(
+        d
+        for d in (d0 + timedelta(days=k) for k in range(1, 20))
+        if d.isoformat() not in {v["date"] for v in before}
+    )
+    _put(client, [{"tid": TID, "visit_date": d1.isoformat(), "moved_from": d0.isoformat()}])
+    _put(client, [{"tid": TID, "visit_date": d0.isoformat(), "moved_from": d0.isoformat()}])
+    assert client.app.state.store.get_overrides() == []
+    assert [(v["date"], v["manual"]) for v in _visits(client)] == [(v["date"], False) for v in before]
+
+
+def test_override_replace_keeps_rows_outside_the_window(client):
+    _warm(client)
+    store = client.app.state.store
+    outside = Override(TID, AS_OF + timedelta(days=40), 7_000_000)
+    store.put_overrides([outside])
+    _put(client, [])
+    assert store.get_overrides() == [outside]

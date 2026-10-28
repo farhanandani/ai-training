@@ -61,7 +61,9 @@ export function rowsFromPlan(plan: PlanResponse, names: Record<string, string>):
   }));
 }
 
-/** The full override set to PUT: the overrides already on the plan, with the pending cell edits merged in. */
+// /** The full override set to PUT: the overrides already on the plan, with the pending cell edits merged in. */
+/** The complete override set to PUT for the plan window (the server replaces the window's overrides with it):
+ * the overrides already on the plan, with the pending cell edits merged in. */
 export function overridesFromEdits(rows: PlanRow[], edits: Edits): Override[] {
   const out: Override[] = [];
   for (const r of rows) {
@@ -86,6 +88,7 @@ export function overridesFromEdits(rows: PlanRow[], edits: Edits): Override[] {
       o.skipped = e.skip;
       if (e.skip) o.amount = null;
     }
+    if (o.moved_from === o.visit_date) o.moved_from = null; // moved back to its original date: not a move
     // a no-op override (nothing moved, set or skipped) is dropped
     if (o.skipped || o.amount != null || o.moved_from != null) out.push(o);
   }

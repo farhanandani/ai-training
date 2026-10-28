@@ -144,7 +144,8 @@ export function PlannerPage() {
   useEffect(() => {
     const sent = pending;
     if (Object.keys(sent).length === 0 || sent !== latest.current.edits) return;
-    const body = { overrides: overridesFromEdits(latest.current.baseRows, sent) };
+    // const body = { overrides: overridesFromEdits(latest.current.baseRows, sent) };
+    const body = { as_of: asOf, h, overrides: overridesFromEdits(latest.current.baseRows, sent) };
     saveOverrides.mutate(body, {
       onSuccess: async () => {
         await qc.invalidateQueries({ queryKey: ["plan"] });

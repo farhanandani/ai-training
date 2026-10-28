@@ -68,6 +68,21 @@ describe("overridesFromEdits", () => {
     expect(o.find((x) => x.tid === "1001")).toMatchObject({ visit_date: "2026-03-11", moved_from: "2026-03-10" });
     expect(o.find((x) => x.tid === "1002")).toMatchObject({ visit_date: "2026-03-12", moved_from: "2026-03-11" });
   });
+
+  it("un-skipping a skipped row leaves it out of the set (the PUT replaces the window)", () => {
+    const skipped = { ...rows[0], skip: true, manual: true, override: { amount: null, skipped: true, moved_from: null } };
+    expect(overridesFromEdits([skipped], { "1001|2026-03-10": { skip: false } })).toEqual([]);
+  });
+
+  it("moving a moved visit back to its original date drops its override", () => {
+    expect(overridesFromEdits([rows[1]], { "1002|2026-03-12": { date: "2026-03-11" } })).toEqual([]);
+  });
+
+  it("moving a moved visit again keeps the original moved_from", () => {
+    expect(overridesFromEdits([rows[1]], { "1002|2026-03-12": { date: "2026-03-13" } })).toEqual([
+      { tid: "1002", visit_date: "2026-03-13", amount: null, skipped: false, moved_from: "2026-03-11" },
+    ]);
+  });
 });
 
 describe("budget helpers", () => {

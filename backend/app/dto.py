@@ -272,6 +272,9 @@ class OverrideDto(BaseModel):
 
 
 class OverridesRequest(BaseModel):
+    # the complete desired override set for the plan window (as_of, as_of + h]; it replaces the stored one
+    as_of: date
+    h: int = Field(ge=7, le=30)
     overrides: list[OverrideDto]
 
 

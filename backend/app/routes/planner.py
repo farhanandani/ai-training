@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -33,8 +34,13 @@ def put_overrides(body: OverridesRequest, svc: Annotated[Services, Depends(get_s
     for o in body.overrides:
         if o.tid not in known:
             raise ApiError(404, "UNKNOWN_TID", f"unknown TID {o.tid}", {"tid": o.tid})
-    svc.store.put_overrides(
-        [Override(o.tid, o.visit_date, o.amount, o.skipped, o.moved_from) for o in body.overrides]
+    # svc.store.put_overrides(
+    #     [Override(o.tid, o.visit_date, o.amount, o.skipped, o.moved_from) for o in body.overrides]
+    # )
+    svc.store.replace_overrides(  # F2/F3: the body is the complete set for the plan window
+        body.as_of,
+        body.as_of + timedelta(days=body.h),
+        [Override(o.tid, o.visit_date, o.amount, o.skipped, o.moved_from) for o in body.overrides],
     )
     return {"ok": True}
 
