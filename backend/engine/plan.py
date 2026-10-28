@@ -111,6 +111,20 @@ def _round_up(x: int, step: int) -> int:
     return -(-int(x) // step) * step
 
 
+def size_load(
+    q: np.ndarray, q50: np.ndarray, i: int, end: int, bal: int, cap: int, mn: int, step: int
+) -> tuple[int, int, int]:
+    """(amount, tier1_need, raw need) for a load on day i covering days i..end (PRD 6.2, TR-30).
+
+    q = service-level quantile, q50 = median (full forecast columns); bal = balance before the load.
+    amount/tier1_need are rounded up to `step` and capped at the room (cap - bal, rounded down)."""
+    end = min(end, len(q) - 1)
+    room = max(cap - bal, 0) // step * step
+    need = int(q[i : end + 1].sum()) + mn - bal
+    tier1 = int(q50[i : end + 1].sum()) + mn - bal
+    return min(max(_round_up(need, step), 0), room), min(max(_round_up(tier1, step), 0), room), need
+
+
 def _plan_status(
     master: AtmMaster, p50: SimResult, p90: SimResult, visit_idx: list[int], frac: float
 ) -> tuple[Status, int | None]:
@@ -222,11 +236,12 @@ def recommend(
 
     def size(i: int, end: int, bal: int) -> tuple[int, int, int]:
         """(amount, tier1_need, raw need) for a load on day i covering days i..end (TR-30)."""
-        end = min(end, last)
-        room = max(cap - bal, 0) // step * step
-        need = int(q[i : end + 1].sum()) + mn - bal
-        tier1 = int(q50[i : end + 1].sum()) + mn - bal
-        return min(max(_round_up(need, step), 0), room), min(max(_round_up(tier1, step), 0), room), need
+        # end = min(end, last)
+        # room = max(cap - bal, 0) // step * step
+        # need = int(q[i : end + 1].sum()) + mn - bal
+        # tier1 = int(q50[i : end + 1].sum()) + mn - bal
+        # return min(max(_round_up(need, step), 0), room), min(max(_round_up(tier1, step), 0), room), need
+        return size_load(q, q50, i, min(end, last), bal, cap, mn, step)
 
     sched = sorted({_idx(d, as_of) for d in visit_dates if 0 <= _idx(d, as_of) < h})
     loads = np.zeros(h, dtype=np.int64)
