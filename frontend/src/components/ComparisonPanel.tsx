@@ -1,7 +1,7 @@
 import type { Comparison, PolicyStats } from "./planRows";
 import { formatRp } from "../lib/format";
 
-type Row = { label: string; get: (s: PolicyStats) => number; fmt: (n: number) => string };
+type Row = { label: string; get: (s: PolicyStats) => number; fmt: (n: number) => string; neutral?: boolean };
 const int = (n: number) => String(n);
 const ROWS: Row[] = [
   { label: "Cash-out days", get: (s) => s.cash_out_days, fmt: int },
@@ -9,7 +9,7 @@ const ROWS: Row[] = [
   { label: "Idle cash cost", get: (s) => s.idle_cost, fmt: formatRp },
   { label: "Visits", get: (s) => s.visits, fmt: int },
   { label: "Visit cost", get: (s) => s.visit_cost, fmt: formatRp },
-  { label: "Cash loaded", get: (s) => s.loaded, fmt: formatRp },
+  { label: "Cash loaded", get: (s) => s.loaded, fmt: formatRp, neutral: true },
 ];
 
 function delta(row: Row, cur: PolicyStats, rec: PolicyStats) {
@@ -18,7 +18,8 @@ function delta(row: Row, cur: PolicyStats, rec: PolicyStats) {
   // every metric here is a cost or a count to minimise: lower is better
   return {
     text: `${d > 0 ? "+" : "-"}${row.fmt(Math.abs(d)).replace(/^-/, "")}`,
-    cls: d < 0 ? "text-green-700" : "text-red-700",
+    // cls: d < 0 ? "text-green-700" : "text-red-700",
+    cls: row.neutral ? "text-slate-500" : d < 0 ? "text-green-700" : "text-red-700",
   };
 }
 

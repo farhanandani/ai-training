@@ -120,7 +120,7 @@ export function PlannerPage() {
   const budget = useDebounced(budgetInput, 300);
 
   const base = usePlan(null); // unconstrained plan: the "70% of need" reference (shares the cache when unconstrained)
-  const { data: plan, isLoading, error } = usePlan(budget);
+  const { data: plan, error, isFetching } = usePlan(budget);
   const fleet = useFleet();
   const names = useMemo(
     () => Object.fromEntries((fleet.data?.atms ?? []).map((a) => [a.tid, a.location_name])),
@@ -170,7 +170,8 @@ export function PlannerPage() {
         Could not load the plan: {error.message}
       </div>
     );
-  if (isLoading || !plan) return <Spinner label="Building the allocation plan" />;
+  // if (isLoading || !plan) return
+  if (!plan) return <Spinner label="Building the allocation plan" />;
 
   const needBase = base.data?.need_total ?? plan.need_total;
   const hasOverrides = baseRows.some((r) => r.override) || Object.keys(edits).length > 0;
@@ -217,6 +218,9 @@ export function PlannerPage() {
               onChange={(e) => setDigits(digitsOnly(e.target.value))}
             />
           </div>
+          {!unconstrained && digits === "" && (
+            <p className="mt-1 text-xs text-amber-700">Enter a budget or tick Unconstrained</p>
+          )}
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" checked={unconstrained} onChange={(e) => setUnconstrained(e.target.checked)} />
@@ -233,6 +237,7 @@ export function PlannerPage() {
           70% of need
         </button>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {isFetching && <span className="text-xs text-slate-500" role="status">Updating&hellip;</span>}
           {hasOverrides && (
             <button type="button" className={btn} onClick={onClear} disabled={clearOverrides.isPending}>
               Clear overrides

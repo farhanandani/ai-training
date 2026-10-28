@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+// import { useMutation, useQuery, useQueryClient, type QueryClient }
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api, qs } from "./client";
 import type {
   AccuracyResponse,
@@ -57,6 +58,8 @@ export function usePlan(budget: number | null) {
         body: JSON.stringify({ as_of: asOf, h, sl, budget }),
       }),
     enabled: ready,
+    // keep the previous plan on screen while a new budget / override version loads
+    placeholderData: keepPreviousData,
   });
 }
 
