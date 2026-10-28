@@ -13,5 +13,5 @@ function Placeholder({ title }: { title: string }) {
 export const FleetPage = () => <Placeholder title="Fleet Overview" />;
 export const AtmDetailPage = () => <Placeholder title={`ATM Detail ${useParams().tid ?? ""}`} />;
 // export const PlannerPage = () => <Placeholder title="Allocation Planner" />;
-export const DataPage = () => <Placeholder title="Data Editor" />;
-export const AccuracyPage = () => <Placeholder title="Forecast Accuracy" />;
+// export const DataPage = () => <Placeholder title="Data Editor" />;
+// export const AccuracyPage = () => <Placeholder title="Forecast Accuracy" />;

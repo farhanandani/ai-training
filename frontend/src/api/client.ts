@@ -59,3 +59,12 @@ export function qs(params: Record<string, string | number | null | undefined>): 
   const s = q.toString();
   return s ? `?${s}` : "";
 }
+
+export type WriteResponse = S["WriteResponse"];
+export type IssueDto = S["IssueDto"];
+export type LogPage = S["LogPage"];
+export type LogRow = S["LogRow"];
+export type MasterRow = S["MasterRow"];
+export type HolidayRow = S["HolidayRow"];
+export type AccuracyAtm = S["AccuracyAtm"];
+export type BacktestPoint = S["BacktestPoint"];

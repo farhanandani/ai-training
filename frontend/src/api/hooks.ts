@@ -6,11 +6,17 @@ import type {
   AtmResponse,
   ContextResponse,
   FleetResponse,
+  HolidayRow,
+  IssueDto,
+  LogPage,
+  LogRow,
+  MasterRow,
   OverridesRequest,
   PlanResponse,
   SettingsResponse,
   SettingsUpdate,
   StatusResponse,
+  WriteResponse,
 } from "./client";
 import { useControls } from "../state/controls";
 
@@ -89,7 +95,9 @@ export function useJobStatus(jobId: string | null | undefined) {
 
 function refreshViews(qc: QueryClient) {
   // for (const k of ["fleet", "atm", "plan", "accuracy"]) void qc.invalidateQueries({ queryKey: [k] });
-  for (const k of ["fleet", "atm", "plan", "accuracy", "settings"]) void qc.invalidateQueries({ queryKey: [k] });
+  // for (const k of ["fleet", "atm", "plan", "accuracy", "settings"]) void qc.invalidateQueries({ queryKey: [k] });
+  for (const k of ["fleet", "atm", "plan", "accuracy", "settings", "datalog", "validation", "datamaster", "dataholidays"])
+    void qc.invalidateQueries({ queryKey: [k] });
 }
 
 /** Write helper: after any write the dataset_version may have changed, so refetch the context and every view. */
@@ -119,3 +127,49 @@ export function useSettings() {
 }
 /** Light-layer settings (overstock threshold, idle rate): saved, then every view refetches. */
 export const useSaveSettings = () => useApiMutation<SettingsUpdate, SettingsResponse>("PUT", "/api/settings");
+
+// ---- Data editor (Task 19)
+export interface LogQuery {
+  tid: string;
+  from: string;
+  to: string;
+  page: number;
+}
+export function useDataLog(q: LogQuery) {
+  const { data: ctx } = useAppContext();
+  return useQuery({
+    queryKey: ["datalog", q, ctx?.dataset_version ?? 0],
+    queryFn: () =>
+      api<LogPage>(`/api/data/log${qs({ tid: q.tid, from: q.from, to: q.to, page: q.page, page_size: 200 })}`),
+    placeholderData: keepPreviousData,
+  });
+}
+export function useValidation() {
+  const { data: ctx } = useAppContext();
+  return useQuery({
+    queryKey: ["validation", ctx?.dataset_version ?? 0],
+    queryFn: () => api<{ issues: IssueDto[] }>("/api/data/validation"),
+  });
+}
+export function useMasterRows() {
+  const { data: ctx } = useAppContext();
+  return useQuery({
+    queryKey: ["datamaster", ctx?.dataset_version ?? 0],
+    queryFn: () => api<{ rows: MasterRow[] }>("/api/data/master"),
+  });
+}
+export function useHolidayRows() {
+  const { data: ctx } = useAppContext();
+  return useQuery({
+    queryKey: ["dataholidays", ctx?.dataset_version ?? 0],
+    queryFn: () => api<{ rows: HolidayRow[] }>("/api/data/holidays"),
+  });
+}
+export const usePatchLog = () =>
+  useApiMutation<{ rows: Partial<LogRow>[] }, WriteResponse>("PATCH", "/api/data/log");
+export const usePostLog = () => useApiMutation<{ rows: Partial<LogRow>[] }, WriteResponse>("POST", "/api/data/log");
+export const useDeleteLog = () =>
+  useApiMutation<{ keys: { tid: string; date: string }[] }, WriteResponse>("DELETE", "/api/data/log");
+export const usePutMaster = () => useApiMutation<{ rows: MasterRow[] }, WriteResponse>("PUT", "/api/data/master");
+export const usePutHolidays = () =>
+  useApiMutation<{ rows: HolidayRow[] }, WriteResponse>("PUT", "/api/data/holidays");

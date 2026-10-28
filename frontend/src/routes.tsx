@@ -1,7 +1,9 @@
 import type { RouteObject } from "react-router-dom";
 // import { AccuracyPage, AtmDetailPage, DataPage, FleetPage, PlannerPage } from "./pages/placeholders";
 // import { AccuracyPage, DataPage, PlannerPage } from "./pages/placeholders";
-import { AccuracyPage, DataPage } from "./pages/placeholders";
+// import { AccuracyPage, DataPage } from "./pages/placeholders";
+import { AccuracyPage } from "./pages/Accuracy";
+import { DataEditorPage as DataPage } from "./pages/DataEditor";
 import { PlannerPage } from "./pages/Planner";
 import { AtmDetailPage } from "./pages/AtmDetail";
 import { FleetPage } from "./pages/FleetOverview";
