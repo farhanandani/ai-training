@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 
 from app.errors import ApiError
 from app.jobs import JobRunner
-from app.routes import accuracy, atm, fleet, system
+from app.routes import accuracy, atm, fleet, planner, system
 from app.services import Services
 from app.settings import Settings
 from app.store import Store
@@ -62,6 +62,7 @@ def create_app(
 
     app = FastAPI(title="ATM Cash Forecasting", lifespan=lifespan)
     install_error_handlers(app)
-    for mod in (system, fleet, atm, accuracy):
+    # for mod in (system, fleet, atm, accuracy):
+    for mod in (system, fleet, atm, accuracy, planner):
         app.include_router(mod.router, prefix="/api")
     return app

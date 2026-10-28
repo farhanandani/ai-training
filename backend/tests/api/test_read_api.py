@@ -4,21 +4,24 @@ from datetime import timedelta
 
 import pandas as pd
 import pytest
-from fastapi.testclient import TestClient
-from test_services import AS_OF, TIDS, _fast_run_tid
 
-import engine.forecast as F
-from app.main import create_app
-from app.settings import Settings
+# from fastapi.testclient import TestClient
+# from test_services import AS_OF, TIDS, _fast_run_tid
+from test_services import AS_OF, TIDS
+
+# import engine.forecast as F
+# from app.main import create_app
+# from app.settings import Settings
 
 
-@pytest.fixture
-def client(tmp_path, seed_dir, monkeypatch):
-    monkeypatch.setattr(F, "run_tid", _fast_run_tid)
-    s = Settings(workspace_db=tmp_path / "ws" / "workspace.db", seed_dir=seed_dir, workers=2)
-    app = create_app(s, start_warmup=False, runner_mode="thread")
-    with TestClient(app) as c:
-        yield c
+# @pytest.fixture
+# def client(tmp_path, seed_dir, monkeypatch):
+#     monkeypatch.setattr(F, "run_tid", _fast_run_tid)
+#     s = Settings(workspace_db=tmp_path / "ws" / "workspace.db", seed_dir=seed_dir, workers=2)
+#     app = create_app(s, start_warmup=False, runner_mode="thread")
+#     with TestClient(app) as c:
+#         yield c
+# moved to tests/api/conftest.py (shared with test_planner_api.py)
 
 
 Q = f"as_of={AS_OF.isoformat()}&h=21&sl=p90"

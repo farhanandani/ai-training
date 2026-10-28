@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -250,3 +251,64 @@ class StatusResponse(BaseModel):
     total: int
     finished: int
     failed: list[FailedTid]
+
+
+# ------------------------------------------------------------------ planner
+class PlanRequest(BaseModel):
+    as_of: date
+    h: int = Field(ge=7, le=30)
+    sl: SL
+    budget: int | None = Field(default=None, ge=0)
+
+
+class OverrideDto(BaseModel):
+    tid: str
+    visit_date: date
+    amount: int | None = Field(default=None, ge=0)
+    skipped: bool = False
+    moved_from: date | None = None
+
+
+class OverridesRequest(BaseModel):
+    overrides: list[OverrideDto]
+
+
+class OkResponse(BaseModel):
+    ok: bool = True
+
+
+class PlanOverrideInfo(BaseModel):
+    amount: int | None
+    skipped: bool
+    moved_from: str | None
+
+
+class PlanVisit(BaseModel):
+    tid: str
+    date: str
+    kind: str
+    recommended: int
+    allocated: int
+    override: PlanOverrideInfo | None
+    tier1_need: int
+    reason: str
+    flags: list[str]
+    manual: bool
+
+
+class PlanResponse(BaseModel):
+    as_of: str
+    h: int
+    sl: SL
+    budget: int | None
+    dataset_version: int
+    pending_tids: list[str]
+    job_id: str | None
+    need_total: int
+    funded_total: int
+    funded_pct: float
+    unused: int
+    underfunded: int
+    visits: list[PlanVisit]
+    reallocation: list[Any]
+    comparison: dict[str, Any]
