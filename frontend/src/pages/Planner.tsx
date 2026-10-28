@@ -119,7 +119,8 @@ export function PlannerPage() {
   const budgetInput = unconstrained || digits === "" ? null : Number(digits);
   const budget = useDebounced(budgetInput, 300);
 
-  const base = usePlan(null); // unconstrained plan: the "70% of need" reference (shares the cache when unconstrained)
+  // const base = usePlan(null); // unconstrained plan: the "70% of need" reference (shares the cache when unconstrained)
+  const base = usePlan(null, false); // unconstrained plan: the "70% of need" reference; never persists settings
   // const { data: plan, isLoading, error } = usePlan(budget);
   const { data: plan, error, isFetching } = usePlan(budget);
   const fleet = useFleet();
@@ -245,9 +246,19 @@ export function PlannerPage() {
               Clear overrides
             </button>
           )}
-          <a className={btn} href={`/api/plan/export.csv${qs({ as_of: asOf, h, sl })}`} download>
-            Export CSV
-          </a>
+          {/* <a className={btn} href={`/api/plan/export.csv${qs({ as_of: asOf, h, sl })}`} download> */}
+          {/*   Export CSV */}
+          {/* </a> */}
+          {pendingTids > 0 ? (
+            <span className={`${btn} cursor-not-allowed opacity-50`} aria-disabled="true" title="Forecasts still running">
+              Export CSV
+            </span>
+          ) : (
+            // F4: export the plan on screen (same budget as the grid)
+            <a className={btn} href={`/api/plan/export.csv${qs({ as_of: asOf, h, sl, budget })}`} download>
+              Export CSV
+            </a>
+          )}
           <SettingsPopover />
         </div>
         {(saveOverrides.isError || clearOverrides.isError) && (

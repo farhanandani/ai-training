@@ -862,6 +862,11 @@ export interface components {
       sl: "p50" | "p80" | "p90" | "p95";
       /** Budget */
       budget?: number | null;
+      /**
+       * Persist
+       * @default true
+       */
+      persist: boolean;
     };
     /** PlanResponse */
     PlanResponse: {
@@ -1343,6 +1348,7 @@ export interface operations {
   export_csv_api_plan_export_csv_get: {
     parameters: {
       query?: {
+        budget?: string | null;
         as_of?: string | null;
         h?: number | null;
         sl?: ("p50" | "p80" | "p90" | "p95") | null;

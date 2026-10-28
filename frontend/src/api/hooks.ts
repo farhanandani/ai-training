@@ -54,14 +54,18 @@ export function useAtm(tid: string | undefined) {
   });
 }
 
-export function usePlan(budget: number | null) {
+// export function usePlan(budget: number | null) {
+/** persist=false: a reference query (the planner's unconstrained base) that must not overwrite saved settings */
+export function usePlan(budget: number | null, persist = true) {
   const { asOf, h, sl, v, ready } = useView();
   return useQuery({
-    queryKey: ["plan", asOf, h, sl, budget, v],
+    // queryKey: ["plan", asOf, h, sl, budget, v],
+    queryKey: ["plan", asOf, h, sl, budget, v, persist],
     queryFn: () =>
       api<PlanResponse>("/api/plan", {
         method: "POST",
-        body: JSON.stringify({ as_of: asOf, h, sl, budget }),
+        // body: JSON.stringify({ as_of: asOf, h, sl, budget }),
+        body: JSON.stringify({ as_of: asOf, h, sl, budget, persist }),
       }),
     enabled: ready,
     // keep the previous plan on screen while a new budget / override version loads

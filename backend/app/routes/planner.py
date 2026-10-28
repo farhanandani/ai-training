@@ -7,7 +7,8 @@ import io
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+# from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
 from app.dto import OkResponse, OverridesRequest, PlanRequest, PlanResponse
@@ -23,8 +24,11 @@ router = APIRouter()
 def plan(body: PlanRequest, svc: Annotated[Services, Depends(get_services)]):
     svc.validate_as_of(body.as_of)
     out = svc.plan(body.as_of, body.h, body.sl, body.budget)  # raises BAD_PARAMS on a negative budget
-    for k, v in (("h", body.h), ("sl", body.sl), ("budget", body.budget)):
-        svc.store.set_setting(k, v)
+    # for k, v in (("h", body.h), ("sl", body.sl), ("budget", body.budget)):
+    #     svc.store.set_setting(k, v)
+    if body.persist:
+        for k, v in (("h", body.h), ("sl", body.sl), ("budget", body.budget)):
+            svc.store.set_setting(k, v)
     return out
 
 
@@ -53,10 +57,27 @@ def delete_overrides(svc: Annotated[Services, Depends(get_services)]):
 
 @router.get("/plan/export.csv")
 def export_csv(
-    p: Annotated[ViewParams, Depends(view_params)], svc: Annotated[Services, Depends(get_services)]
+    # p: Annotated[ViewParams, Depends(view_params)], svc: Annotated[Services, Depends(get_services)]
+    p: Annotated[ViewParams, Depends(view_params)],
+    svc: Annotated[Services, Depends(get_services)],
+    budget: Annotated[str | None, Query()] = None,
 ):
-    budget = svc.store.get_setting("budget")
-    out = svc.plan(p.as_of, p.h, p.sl, budget)
+    # budget = svc.store.get_setting("budget")
+    # F4: the on-screen budget comes as a query param (absent/empty = unconstrained)
+    try:
+        amount = int(budget) if budget not in (None, "") else None
+    except ValueError:
+        raise ApiError(400, "BAD_PARAMS", f"budget must be an integer, got {budget!r}", {"budget": budget})
+    # out = svc.plan(p.as_of, p.h, p.sl, budget)
+    out = svc.plan(p.as_of, p.h, p.sl, amount)
+    if out["pending_tids"]:
+        n = len(out["pending_tids"])
+        raise ApiError(
+            409,
+            "PENDING",
+            f"forecasts still running for {n} ATM{'s' if n != 1 else ''}; export when they are done",
+            {"pending_tids": out["pending_tids"], "job_id": out["job_id"]},
+        )
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
     w.writerow(["tid", "visit_date", "amount", "source"])

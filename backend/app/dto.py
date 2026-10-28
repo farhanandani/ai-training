@@ -261,6 +261,7 @@ class PlanRequest(BaseModel):
     h: int = Field(ge=7, le=30)
     sl: SL
     budget: int | None = Field(default=None, ge=0)
+    persist: bool = True  # F4: save h/sl/budget as settings (the planner's base query sends false)
 
 
 class OverrideDto(BaseModel):

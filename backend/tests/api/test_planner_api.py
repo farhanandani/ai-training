@@ -213,3 +213,37 @@ def test_override_replace_keeps_rows_outside_the_window(client):
     store.put_overrides([outside])
     _put(client, [])
     assert store.get_overrides() == [outside]
+
+
+def test_export_uses_the_budget_param(client):
+    # F4: the export reflects the on-screen budget (query param), not the last persisted one.
+    b = _warm(client)
+    budget = b["need_total"] * 7 // 10 // 100_000 * 100_000
+    plan = client.post("/api/plan", json={**BODY, "budget": budget}).json()
+    client.post("/api/plan", json={**BODY, "persist": False})  # the base (unconstrained) query lands last
+    r = client.get(f"/api/plan/export.csv?{Q}&budget={budget}")
+    assert r.status_code == 200
+    rows = list(csv.reader(io.StringIO(r.text)))[1:]
+    want = [[v["tid"], v["date"], str(v["allocated"])] for v in plan["visits"] if "skip" not in v["flags"]]
+    assert [x[:3] for x in rows] == want
+    assert sum(int(x[2]) for x in rows) == plan["funded_total"] < b["need_total"]
+    # empty / absent budget = unconstrained
+    for q in (Q, f"{Q}&budget="):
+        rows = list(csv.reader(io.StringIO(client.get(f"/api/plan/export.csv?{q}").text)))[1:]
+        assert sum(int(x[2]) for x in rows) == b["need_total"]
+    r = client.get(f"/api/plan/export.csv?{Q}&budget=abc")
+    assert r.status_code == 400 and r.json()["error"]["code"] == "BAD_PARAMS"
+
+
+def test_plan_persist_false_keeps_settings(client):
+    b = _warm(client)
+    client.post("/api/plan", json={**BODY, "budget": b["need_total"] // 2})
+    client.post("/api/plan", json={**BODY, "h": 14, "persist": False})
+    s = client.get("/api/settings").json()
+    assert (s["h"], s["budget"]) == (21, b["need_total"] // 2)
+
+
+def test_export_pending_is_409(client):
+    r = client.get(f"/api/plan/export.csv?{Q}")
+    assert r.status_code == 409 and r.json()["error"]["code"] == "PENDING"
+    assert r.json()["error"]["details"]["pending_tids"]
