@@ -357,5 +357,9 @@ def run_tid_incremental(
     name, model, forecast, expl, fitted = _final_or_fallback(
         name, sarimax_orders, y, X_hist, X_fut, as_of, diag, "prior sarimax orders missing"
     )
+    if prior.diagnostics.get("fallback") and not diag["fallback"]:
+        # the prior run already fell back (TR-41): keep showing it, with its original error
+        diag["fallback"] = True
+        diag["error"] = prior.diagnostics.get("error")
     bt, leb = prior.backtest, prior.lebaran_check
     return _result(tid, as_of, t0, name, sarimax_orders, aic, model, forecast, expl, fitted, bt, leb, diag)

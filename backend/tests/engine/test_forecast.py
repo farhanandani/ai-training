@@ -219,3 +219,14 @@ def test_incremental_fallback_keeps_stale_backtest(monkeypatch, log_df, holidays
 def test_incremental_short_history_returns_none(log_df, holidays_df):
     short = log_df[log_df["date"] >= date(2025, 12, 1)]
     assert fc.run_tid_incremental("TID-JKT-0008", short, holidays_df, AS_OF, _prior("ets")) is None
+
+
+def test_incremental_keeps_prior_fallback(monkeypatch, log_df, holidays_df):
+    _forbid(monkeypatch)
+    prior = _prior("seasonal_naive")
+    prior.diagnostics = {"warnings": [], "fallback": True, "error": "sarimax: did not converge"}
+    r = fc.run_tid_incremental("TID-JKT-0008", log_df, holidays_df, AS_OF, prior)
+    assert r.model == "seasonal_naive"
+    assert r.diagnostics["fallback"] is True
+    assert r.diagnostics["error"] == "sarimax: did not converge"
+    assert r.diagnostics["backtest_stale"] is True

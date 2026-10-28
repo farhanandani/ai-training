@@ -42,7 +42,9 @@ def test_upload_replace_valid_csv(client, seed_dir):
 def test_upload_merge_label(client):
     body = "tid,date,opening_balance,withdrawal,replenishment,closing_balance\n"
     body += f"{TID},2026-03-06,500000000,100000000,0,400000000\n"
+    assert client.app.state.store.get_true_demand() is not None
     assert _upload(client, "fix.csv", body.encode()).status_code == 200  # mode defaults to merge
+    assert client.app.state.store.get_true_demand() is None  # TR-16: merged client data drops ground truth
     assert client.get("/api/context").json()["data_source"] == "Dummy data + fix.csv"
     assert client.get("/api/data/log").json()["total"] == 7300
     assert _upload(client, "again.csv", body.encode(), mode="merge").status_code == 200
@@ -167,3 +169,47 @@ def test_upload_too_large_413(small_client):
     r = _upload(small_client, "big.csv", b"x" * 2000)
     assert r.status_code == 413
     assert r.json()["error"]["code"] == "FILE_TOO_LARGE"
+
+
+def test_replace_upload_clears_cache_full_run(client, seed_dir, monkeypatch):
+    """A log replace is a new dataset: the next forecasts are full runs, never incremental refits."""
+    q = "as_of=2026-03-06&h=21&sl=p90"
+    job = client.get(f"/api/fleet?{q}").json()["job_id"]
+    assert client.app.state.services.runner.wait(job, timeout=60)
+    full = []
+    monkeypatch.setattr(F, "run_tid", lambda tid, *a: full.append(tid) or _fast_run_tid(tid, *a))
+    monkeypatch.setattr(F, "run_tid_incremental", lambda *a: pytest.fail("incremental after replace"))
+    lines = (seed_dir / LOG_CSV).read_text(encoding="utf-8").splitlines()
+    i = next(k for k, ln in enumerate(lines) if ln.startswith(f"{TID},2026-03-06,"))
+    f = lines[i].split(",")
+    f[3] = str(int(f[3]) * 3)  # withdrawal x3 (identity broken; stored with a warning)
+    lines[i] = ",".join(f)
+    r = _upload(client, "client.csv", "\n".join(lines).encode(), mode="replace")
+    assert r.status_code == 200
+    b = r.json()
+    assert TID in b["job"]["pending_tids"]  # cache cleared: every un-memoised TID is recomputed
+    assert client.app.state.services.runner.wait(b["job"]["job_id"], timeout=60)
+    assert sorted(full) == b["job"]["pending_tids"]  # all full runs, none incremental
+    assert client.app.state.services.runner.status(b["job"]["job_id"])["failed"] == []
+
+
+@pytest.mark.parametrize(
+    ("kind", "body"),
+    [
+        (
+            "master",
+            (
+                "tid,capacity,min_safe_balance,replenish_cycle_days,denomination,cost_per_visit,"
+                "current_fill_level\nTID-X,1,1,1,20000,1,1\n"
+            ),
+        ),
+        ("holidays", "date,name,type\n2027-12-30,Party,party\n"),
+    ],
+)
+def test_merge_with_no_valid_rows_writes_nothing(client, kind, body):
+    v0 = client.get("/api/context").json()["dataset_version"]
+    r = _upload(client, "x.csv", body.encode(), kind=kind)
+    assert r.status_code == 200
+    assert _codes(r.json()["issues"], "BAD_VALUE")
+    assert r.json()["dataset_version"] == v0
+    assert client.get("/api/context").json()["dataset_version"] == v0

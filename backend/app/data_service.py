@@ -112,11 +112,13 @@ def upload(svc: Services, data: bytes, filename: str, kind: str, mode: str) -> d
         _upload_log(svc, df, filename, replace)
     elif kind == "master":
         rows = _valid_master(_master_rows(df), issues)
-        if rows or not replace:  # an empty replace would cascade-delete the whole log
+        # if rows or not replace:  # an empty replace would cascade-delete the whole log
+        if rows:  # no valid row: nothing written, no version bump (an empty replace would wipe the log)
             store.put_master(rows, replace=replace)
     else:
         df = _valid_holidays(df, issues)
-        if len(df) or not replace:
+        # if len(df) or not replace:
+        if len(df):
             store.put_holidays(df, replace=replace)
     return finish_write(svc, parse_issues=issues)
 
@@ -132,9 +134,11 @@ def _upload_log(svc: Services, df: pd.DataFrame, filename: str, replace: bool) -
             store.put_master(new)  # upsert_log/replace_log need the master rows first
         if replace:
             store.replace_log(df)
+            store.clear_forecast_cache()  # a new dataset gets full runs, never incremental refits
             store.set_source_label(filename)
         else:
             store.upsert_log(df, "upload")
+            store.clear_true_demand()  # TR-16
             if store.source_label() == DUMMY_LABEL:
                 store.set_source_label(f"{DUMMY_LABEL} + {filename}")
 

@@ -229,6 +229,11 @@ class Store:
             self._insert_log(df, "upload")
             self._bump()
 
+    def clear_true_demand(self) -> None:
+        """TR-16: once client data is merged in, the dummy ground truth no longer describes the log."""
+        with self._tx() as c:
+            c.execute("DELETE FROM true_demand")
+
     def delete_log(self, keys: list[tuple[str, date]]) -> None:
         with self._tx() as c:
             c.executemany("DELETE FROM daily_log WHERE tid = ? AND date = ?", [(t, _iso(d)) for t, d in keys])
@@ -384,6 +389,10 @@ class Store:
             (tid, _iso(as_of)),
         )
         return json.loads(rows[0][0]) if rows else None
+
+    def clear_forecast_cache(self) -> None:
+        with self._tx() as c:
+            c.execute("DELETE FROM forecast_cache")
 
     def cache_prune(self, keep: int = 500) -> None:
         with self._tx() as c:
