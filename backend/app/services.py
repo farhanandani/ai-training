@@ -14,6 +14,7 @@ from app.settings import Settings
 
 # from app.store import Store
 from app.store import Store, frame_hash
+from engine import ENGINE_VERSION
 from engine.allocate import allocate, reallocation_flows
 from engine.backtest import metrics
 from engine.compare import build_demand_source, compare
@@ -136,10 +137,22 @@ class Services:
         job_id = None
         if misses:
             hol_records = self._records(hol)
+            # job_id = self.runner.submit(
+            #     misses, lambda tid, _a: (self._records(logs[tid]), hol_records), self._on_result
+            # )
             job_id = self.runner.submit(
-                misses, lambda tid, _a: (self._records(logs[tid]), hol_records), self._on_result
+                misses,
+                lambda tid, a: (self._records(logs[tid]), hol_records, self._prior(tid, a)),
+                self._on_result,
             )
         return ready, sorted(t for t, _ in misses.values()), job_id, failed
+
+    def _prior(self, tid: str, as_of: date) -> dict | None:
+        """Cached payload of an earlier run for (tid, as_of) under another data hash -> incremental refit."""
+        p = self.store.cache_latest(tid, as_of)
+        if p is None or p.get("insufficient") or p.get("engine_version") != ENGINE_VERSION:
+            return None
+        return p
 
     def ensure_forecasts(self, as_of: date) -> tuple[dict[str, ForecastResult | None], list[str], str | None]:
         """Ready results (None = insufficient history), pending TIDs, job_id (None when nothing was submitted)."""
@@ -343,6 +356,7 @@ class Services:
             "name": fc.model,
             "fallback": bool(fc.diagnostics.get("fallback", False)),
             "orders": fc.orders,
+            "backtest_stale": bool(fc.diagnostics.get("backtest_stale", False)),
         }
         rows = fc.backtest.get(fc.model)
         out["metrics"] = _clean_metrics(metrics(rows, h)) if rows is not None else None
@@ -427,6 +441,7 @@ class Services:
                 "status": "forecast_failed" if tid in failed else "insufficient_history",
                 "model": None,
                 "fallback": False,
+                "backtest_stale": False,
                 "error": failed.get(tid),
                 "metrics": None,
                 "candidates": [],
@@ -440,6 +455,7 @@ class Services:
                     status="ok",
                     model=fc.model,
                     fallback=bool(fc.diagnostics.get("fallback", False)),
+                    backtest_stale=bool(fc.diagnostics.get("backtest_stale", False)),
                     metrics=_clean_metrics(metrics(bt[fc.model], h)) if fc.model in bt else None,
                     candidates=[
                         {"model": n, **_clean_metrics(metrics(bt[n], h))} for n in PREFERENCE if n in bt

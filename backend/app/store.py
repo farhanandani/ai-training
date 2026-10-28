@@ -376,6 +376,15 @@ class Store:
                 ),
             )
 
+    def cache_latest(self, tid: str, as_of) -> dict | None:
+        """Newest cached payload for (tid, as_of), whatever its data hash (incremental refit, AC5)."""
+        rows = self._q(
+            "SELECT payload FROM forecast_cache WHERE tid = ? AND as_of = ? "
+            "ORDER BY created_at DESC, rowid DESC LIMIT 1",
+            (tid, _iso(as_of)),
+        )
+        return json.loads(rows[0][0]) if rows else None
+
     def cache_prune(self, keep: int = 500) -> None:
         with self._tx() as c:
             c.execute(

@@ -215,15 +215,65 @@ def _dedupe(xs: list[str]) -> list[str]:
     return list(dict.fromkeys(xs))
 
 
-def run_tid(tid: str, log: pd.DataFrame, holidays: pd.DataFrame, as_of: date) -> ForecastResult | None:
-    t0 = time.perf_counter()
+def _inputs(tid: str, log: pd.DataFrame, holidays: pd.DataFrame, as_of: date):
+    """(y, X_hist, X_fut), or None when the TID has less than MIN_TRAIN_DAYS of history."""
     y = demand_series(log, tid, as_of)
     if len(y) < MIN_TRAIN_DAYS:
         return None
     fut = pd.date_range(pd.Timestamp(as_of) + pd.Timedelta(days=1), periods=HORIZON, freq="D")
     # raises HolidaysNotCovered before any fitting when the table stops short of as_of + 30
     X_all = features(y.index.append(fut), holidays, y.index[0].date())
-    X_hist, X_fut = X_all.loc[y.index], X_all.loc[fut]
+    return y, X_all.loc[y.index], X_all.loc[fut]
+
+
+def _final_or_fallback(name: str | None, sarimax_orders, y, X_hist, X_fut, as_of, diag: dict, cause: str):
+    """Final fit of the selected model; any failure (incl. non-finite output) falls back to seasonal naive."""
+    try:
+        if name is None:
+            raise RuntimeError(cause)
+        model, forecast, expl, fitted = _final(name, sarimax_orders, y, X_hist, X_fut, as_of)
+    except Exception as e:  # noqa: BLE001  TR-41 fallback to seasonal naive
+        diag["fallback"] = True
+        diag["error"] = f"{name}: {e}" if name is not None else str(e)
+        name = "seasonal_naive"
+        model, forecast, expl, fitted = _final(name, None, y, X_hist, X_fut, as_of)
+    return name, model, forecast, expl, fitted
+
+
+def _result(tid, as_of, t0, name, sarimax_orders, aic, model, forecast, expl, fitted, bt, leb, diag):
+    diag["warnings"] = _dedupe(diag["warnings"] + list(getattr(model, "warnings", [])))
+    diag["fit_seconds"] = round(time.perf_counter() - t0, 3)
+    orders = None
+    if name == "sarimax":
+        orders = {"order": list(sarimax_orders[0]), "seasonal_order": list(sarimax_orders[1]), "aic": aic}
+    return ForecastResult(
+        tid=tid,
+        as_of=as_of,
+        engine_version=ENGINE_VERSION,
+        model=name,
+        orders=orders,
+        forecast=forecast,
+        explanations=expl,
+        backtest=bt,
+        lebaran_check=leb,
+        diagnostics=diag,
+        fitted_q50=fitted,
+    )
+
+
+def run_tid(tid: str, log: pd.DataFrame, holidays: pd.DataFrame, as_of: date) -> ForecastResult | None:
+    t0 = time.perf_counter()
+    # y = demand_series(log, tid, as_of)
+    # if len(y) < MIN_TRAIN_DAYS:
+    #     return None
+    # fut = pd.date_range(pd.Timestamp(as_of) + pd.Timedelta(days=1), periods=HORIZON, freq="D")
+    # # raises HolidaysNotCovered before any fitting when the table stops short of as_of + 30
+    # X_all = features(y.index.append(fut), holidays, y.index[0].date())
+    # X_hist, X_fut = X_all.loc[y.index], X_all.loc[fut]
+    inp = _inputs(tid, log, holidays, as_of)
+    if inp is None:
+        return None
+    y, X_hist, X_fut = inp
     diag: dict = {"warnings": [], "fallback": False}
 
     sarimax_orders = None
@@ -252,33 +302,60 @@ def run_tid(tid: str, log: pd.DataFrame, holidays: pd.DataFrame, as_of: date) ->
         except Exception as e:  # noqa: BLE001  reported separately, never blocks the forecast
             diag["warnings"].append(f"lebaran check failed: {e}")
 
-    try:
-        if name is None:
-            # raise RuntimeError("no model selected")
-            raise RuntimeError(cause)
-        model, forecast, expl, fitted = _final(name, sarimax_orders, y, X_hist, X_fut, as_of)
-    except Exception as e:  # noqa: BLE001  TR-41 fallback to seasonal naive
-        diag["fallback"] = True
-        # diag["error"] = f"{name}: {e}"
-        diag["error"] = f"{name}: {e}" if name is not None else str(e)
-        name = "seasonal_naive"
-        model, forecast, expl, fitted = _final(name, None, y, X_hist, X_fut, as_of)
-
-    diag["warnings"] = _dedupe(diag["warnings"] + list(getattr(model, "warnings", [])))
-    diag["fit_seconds"] = round(time.perf_counter() - t0, 3)
-    orders = None
-    if name == "sarimax":
-        orders = {"order": list(sarimax_orders[0]), "seasonal_order": list(sarimax_orders[1]), "aic": aic}
-    return ForecastResult(
-        tid=tid,
-        as_of=as_of,
-        engine_version=ENGINE_VERSION,
-        model=name,
-        orders=orders,
-        forecast=forecast,
-        explanations=expl,
-        backtest=bt,
-        lebaran_check=leb,
-        diagnostics=diag,
-        fitted_q50=fitted,
+    # try:
+    #     if name is None:
+    #         # raise RuntimeError("no model selected")
+    #         raise RuntimeError(cause)
+    #     model, forecast, expl, fitted = _final(name, sarimax_orders, y, X_hist, X_fut, as_of)
+    # except Exception as e:  # TR-41 fallback to seasonal naive (BLE001)
+    #     diag["fallback"] = True
+    #     # diag["error"] = f"{name}: {e}"
+    #     diag["error"] = f"{name}: {e}" if name is not None else str(e)
+    #     name = "seasonal_naive"
+    #     model, forecast, expl, fitted = _final(name, None, y, X_hist, X_fut, as_of)
+    name, model, forecast, expl, fitted = _final_or_fallback(
+        name, sarimax_orders, y, X_hist, X_fut, as_of, diag, cause
     )
+
+    # diag["warnings"] = _dedupe(diag["warnings"] + list(getattr(model, "warnings", [])))
+    # diag["fit_seconds"] = round(time.perf_counter() - t0, 3)
+    # orders = None
+    # if name == "sarimax":
+    #     orders = {"order": list(sarimax_orders[0]), "seasonal_order": list(sarimax_orders[1]), "aic": aic}
+    # return ForecastResult(
+    #     tid=tid,
+    #     as_of=as_of,
+    #     engine_version=ENGINE_VERSION,
+    #     model=name,
+    #     orders=orders,
+    #     forecast=forecast,
+    #     explanations=expl,
+    #     backtest=bt,
+    #     lebaran_check=leb,
+    #     diagnostics=diag,
+    #     fitted_q50=fitted,
+    # )
+    return _result(tid, as_of, t0, name, sarimax_orders, aic, model, forecast, expl, fitted, bt, leb, diag)
+
+
+def run_tid_incremental(
+    tid: str, log: pd.DataFrame, holidays: pd.DataFrame, as_of: date, prior: ForecastResult
+) -> ForecastResult | None:
+    """Refit after a data edit (AC5): only the prior winner with the prior orders. No order grid, no backtest,
+    no Lebaran check; those are carried over from `prior` and flagged `backtest_stale`. TR-41 fallback kept."""
+    t0 = time.perf_counter()
+    inp = _inputs(tid, log, holidays, as_of)
+    if inp is None:
+        return None
+    y, X_hist, X_fut = inp
+    diag: dict = {"warnings": [], "fallback": False, "backtest_stale": True}
+    sarimax_orders, aic = None, None
+    if prior.model == "sarimax" and prior.orders:
+        o = prior.orders
+        sarimax_orders, aic = (tuple(o["order"]), tuple(o["seasonal_order"])), o.get("aic")
+    name = prior.model if prior.model != "sarimax" or sarimax_orders else None
+    name, model, forecast, expl, fitted = _final_or_fallback(
+        name, sarimax_orders, y, X_hist, X_fut, as_of, diag, "prior sarimax orders missing"
+    )
+    bt, leb = prior.backtest, prior.lebaran_check
+    return _result(tid, as_of, t0, name, sarimax_orders, aic, model, forecast, expl, fitted, bt, leb, diag)

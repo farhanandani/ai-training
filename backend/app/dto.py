@@ -163,6 +163,7 @@ class ModelInfo(BaseModel):
     name: str
     fallback: bool
     orders: Any | None = None
+    backtest_stale: bool = False
 
 
 class MetricsDto(BaseModel):
@@ -223,6 +224,7 @@ class AccuracyAtm(BaseModel):
     status: str
     model: str | None
     fallback: bool
+    backtest_stale: bool = False
     error: str | None
     metrics: MetricsDto | None
     candidates: list[CandidateMetrics]

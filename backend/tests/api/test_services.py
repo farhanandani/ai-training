@@ -427,6 +427,7 @@ def test_accuracy_shape(svc):
         "status",
         "model",
         "fallback",
+        "backtest_stale",
         "error",
         "metrics",
         "candidates",
@@ -602,3 +603,37 @@ def test_insufficient_history_tid_in_fleet_and_plan(svc, store):
     assert p["need_total"] > 0 and p["funded_pct"] == 1.0
     q = svc.plan(AS_OF, 21, "p90", p["need_total"] // 2)
     assert q["funded_total"] <= p["need_total"] // 2
+
+
+def test_edited_tid_goes_incremental(svc, store, monkeypatch):
+    """AC5: after a data edit, a TID with a cached result for the same as_of refits incrementally."""
+    _warm(svc)
+    calls = []
+    real = F.run_tid_incremental
+
+    def spy(tid, log, holidays, as_of, prior):
+        calls.append((tid, as_of, prior.model))
+        return real(tid, log, holidays, as_of, prior)
+
+    monkeypatch.setattr(F, "run_tid_incremental", spy)
+    df = store.get_log(["TID-JKT-0001"], date(2026, 3, 6), date(2026, 3, 6)).copy()
+    df["withdrawal"] *= 3
+    store.upsert_log(df, "edit")
+    _ready, pending, job = svc.ensure_forecasts(AS_OF)
+    assert pending == ["TID-JKT-0001"]
+    assert svc.runner.wait(job, timeout=60)
+    assert calls == [("TID-JKT-0001", AS_OF, "seasonal_naive")]
+    a = svc.atm("TID-JKT-0001", AS_OF, 21, "p90", None)
+    assert a["model"]["backtest_stale"] is True
+    assert svc.atm("TID-JKT-0002", AS_OF, 21, "p90", None)["model"]["backtest_stale"] is False
+    acc = {r["tid"]: r for r in svc.accuracy(AS_OF, 14)["atms"]}
+    assert acc["TID-JKT-0001"]["backtest_stale"] is True
+    assert acc["TID-JKT-0001"]["backtest"]  # carried over from the prior run
+    assert acc["TID-JKT-0002"]["backtest_stale"] is False
+
+
+def test_other_as_of_runs_full(svc, store, monkeypatch):
+    _warm(svc)
+    monkeypatch.setattr(F, "run_tid_incremental", lambda *a: pytest.fail("no prior for this as_of"))
+    job = _warm(svc, AS_OF + timedelta(days=1))
+    assert job is not None and svc.runner.status(job)["failed"] == []

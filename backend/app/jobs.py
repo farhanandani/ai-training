@@ -38,8 +38,12 @@ def _init_worker() -> None:
         os.environ[v] = "1"
 
 
-def _worker_run_tid(tid: str, log_records: list[dict], holiday_records: list[dict], as_of_iso: str) -> dict:
-    """Runs in a worker process. Plain records in, plain dict out (nothing heavy crosses the boundary)."""
+# def _worker_run_tid(tid: str, log_records: list[dict], holiday_records: list[dict], as_of_iso: str) -> dict:
+def _worker_run_tid(
+    tid: str, log_records: list[dict], holiday_records: list[dict], as_of_iso: str, prior: dict | None = None
+) -> dict:
+    """Runs in a worker process. Plain records in, plain dict out (nothing heavy crosses the boundary).
+    `prior`: the cached payload of an earlier run for the same (tid, as_of) -> incremental refit (AC5)."""
     import pandas as pd
 
     from engine import forecast
@@ -50,7 +54,12 @@ def _worker_run_tid(tid: str, log_records: list[dict], holiday_records: list[dic
         log["date"] = [date.fromisoformat(d) for d in log["date"]]
         hol = pd.DataFrame(holiday_records, columns=["date", "name", "type"])
         hol["date"] = [date.fromisoformat(d) for d in hol["date"]]
-        res = forecast.run_tid(tid, log, hol, date.fromisoformat(as_of_iso))
+        # res = forecast.run_tid(tid, log, hol, date.fromisoformat(as_of_iso))
+        if prior is not None:
+            prev = forecast.ForecastResult.from_payload(prior)
+            res = forecast.run_tid_incremental(tid, log, hol, date.fromisoformat(as_of_iso), prev)
+        else:
+            res = forecast.run_tid(tid, log, hol, date.fromisoformat(as_of_iso))
     except Exception as e:  # noqa: BLE001  reported per TID; other TIDs keep working (TR-41)
         return {"error": str(e), "code": getattr(e, "code", "FORECAST_FAILED")}
     if res is None:
@@ -58,7 +67,8 @@ def _worker_run_tid(tid: str, log_records: list[dict], holiday_records: list[dic
     return {"ok": res.to_payload()}
 
 
-PayloadFn = Callable[[str, date], tuple[list[dict], list[dict]]]
+# PayloadFn = Callable[[str, date], tuple[list[dict], list[dict]]]
+PayloadFn = Callable[[str, date], tuple]  # (log_records, holiday_records[, prior payload | None])
 ResultFn = Callable[[str, str, date, dict], None]
 _BROKEN = (BrokenProcessPool, BrokenThreadPool)
 
@@ -167,12 +177,20 @@ class JobRunner:
                 # self._inflight[key] = fut
                 # fut.add_done_callback(lambda f, k=key, t=tid, a=as_of: self._finish(k, t, a, f, on_result))
                 try:
-                    log_records, holiday_records = payload_fn(tid, as_of)
+                    # log_records, holiday_records = payload_fn(tid, as_of)
+                    log_records, holiday_records, *extra = payload_fn(tid, as_of)  # extra: optional prior
                 except Exception as e:  # noqa: BLE001  recorded so the job still reaches done
                     self._done[key] = f"PAYLOAD_FAILED: {e}"
                     self._retry.add(key)
                     continue
-                args = (tid, log_records, holiday_records, as_of.isoformat())
+                # args = (tid, log_records, holiday_records, as_of.isoformat())
+                args = (
+                    tid,
+                    log_records,
+                    holiday_records,
+                    as_of.isoformat(),
+                    *[p for p in extra if p is not None],
+                )
                 self._launch(key, tid, as_of, args, on_result)
             # registered after submission: every key is now in flight or resolved in _done
             self._jobs[job_id] = _Job(dict(keys))

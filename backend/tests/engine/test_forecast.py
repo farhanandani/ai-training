@@ -137,3 +137,85 @@ def test_too_few_origins_falls_back(monkeypatch, log_df, holidays_df):
     assert r.diagnostics["fallback"] is True
     assert r.backtest == {}
     assert "origins" in r.diagnostics["error"]
+
+
+# ------------------------------------------------------- incremental refit (AC5)
+def _prior(model, orders=None):
+    idx = pd.date_range("2026-03-07", periods=30, freq="D", name="date")
+    bt = {"seasonal_naive": [{"origin": date(2026, 1, 1), "date": date(2026, 1, 2), "y": 1.0, "q50": 1.0}]}
+    return ForecastResult(
+        tid="TID-JKT-0008",
+        as_of=AS_OF,
+        engine_version="x",
+        model=model,
+        orders=orders,
+        forecast=pd.DataFrame({c: np.ones(30, dtype="int64") for c in QCOLS}, index=idx),
+        explanations={},
+        backtest=bt,
+        lebaran_check={"origin": date(2025, 3, 1), "fitri_day": date(2025, 3, 31), "metrics": {"wape": 0.1}},
+        diagnostics={"warnings": [], "fallback": False},
+        fitted_q50=pd.Series(dtype="int64"),
+    )
+
+
+def _forbid(monkeypatch):
+    def boom(*a, **k):
+        raise AssertionError("incremental refit must not run the grid / backtest / lebaran check")
+
+    for f in ("select_sarimax_order", "run_backtest", "lebaran_check", "select_model"):
+        monkeypatch.setattr(fc, f, boom)
+
+
+def test_incremental_reuses_prior_model_and_orders(monkeypatch, log_df, holidays_df):
+    _forbid(monkeypatch)
+    made = []
+
+    class _Res:
+        params = pd.Series({"payday": 0.1})
+
+    class StubSarimax:  # stub fit: records nothing heavy, mimics the fitted SARIMAX surface
+        warnings = ()
+
+        def fit(self, y, X=None):
+            self._res = _Res()
+            self._res.fittedvalues = np.log1p(y.fillna(0).to_numpy())
+            return self
+
+        def predict(self, h, X_future=None):
+            return pd.DataFrame({c: np.full(h, 1e8) for c in QCOLS}, index=X_future.index[:h])
+
+    def spy(name, orders):
+        made.append((name, orders))
+        return StubSarimax()
+
+    monkeypatch.setattr(fc, "_make", spy)
+    prior = _prior("sarimax", {"order": [1, 0, 1], "seasonal_order": [1, 0, 0, 7], "aic": 12.5})
+    r = fc.run_tid_incremental("TID-JKT-0008", log_df, holidays_df, AS_OF, prior)
+    assert made == [("sarimax", ((1, 0, 1), (1, 0, 0, 7)))]
+    assert r.model == "sarimax"
+    assert r.orders == {"order": [1, 0, 1], "seasonal_order": [1, 0, 0, 7], "aic": 12.5}
+    assert r.diagnostics["backtest_stale"] is True and r.diagnostics["fallback"] is False
+    assert r.backtest is prior.backtest and r.lebaran_check is prior.lebaran_check
+    assert len(r.forecast) == 30 and len(r.fitted_q50) > 0
+    json.dumps(r.to_payload(), allow_nan=False)
+
+
+def test_incremental_fallback_keeps_stale_backtest(monkeypatch, log_df, holidays_df):
+    _forbid(monkeypatch)
+
+    def predict(self, h, X_future=None):
+        idx = pd.date_range("2026-03-07", periods=h, freq="D")
+        return pd.DataFrame({c: np.full(h, np.nan) for c in QCOLS}, index=idx)
+
+    monkeypatch.setattr(Ets, "fit", lambda self, y, X=None: self)
+    monkeypatch.setattr(Ets, "predict", predict)
+    r = fc.run_tid_incremental("TID-JKT-0008", log_df, holidays_df, AS_OF, _prior("ets"))
+    assert r.model == "seasonal_naive"
+    assert r.diagnostics["fallback"] is True and r.diagnostics["error"].startswith("ets:")
+    assert r.diagnostics["backtest_stale"] is True
+    assert r.backtest == _prior("ets").backtest
+
+
+def test_incremental_short_history_returns_none(log_df, holidays_df):
+    short = log_df[log_df["date"] >= date(2025, 12, 1)]
+    assert fc.run_tid_incremental("TID-JKT-0008", short, holidays_df, AS_OF, _prior("ets")) is None
