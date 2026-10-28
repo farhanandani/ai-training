@@ -125,6 +125,10 @@ class Store:
             finally:
                 self._depth = 0
 
+    def transaction(self):
+        """Public handle on _tx: callers group several writes into one SQLite transaction (TR-12)."""
+        return self._tx()
+
     def _q(self, sql: str, params=()) -> list[tuple]:
         with self._lock:
             return self._conn.execute(sql, params).fetchall()

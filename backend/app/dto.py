@@ -312,3 +312,112 @@ class PlanResponse(BaseModel):
     visits: list[PlanVisit]
     reallocation: list[Any]
     comparison: dict[str, Any]
+
+
+# --------------------------------------------------------------------- data
+HolidayType = Literal["new_year", "christmas", "idul_fitri", "cuti_bersama", "national"]
+
+
+class IssueDto(BaseModel):
+    severity: Literal["error", "warning", "info"]
+    code: str
+    message: str
+    tid: str | None = None
+    date: str | None = None
+
+
+class JobRef(BaseModel):
+    job_id: str | None
+    pending_tids: list[str]
+
+
+class WriteResponse(BaseModel):
+    """TR-37 body of every data write."""
+
+    dataset_version: int
+    issues: list[IssueDto]
+    job: JobRef
+
+
+class ValidationResponse(BaseModel):
+    issues: list[IssueDto]
+
+
+class LogRow(BaseModel):
+    tid: str
+    date: date
+    opening_balance: int
+    withdrawal: int
+    replenishment: int
+    closing_balance: int
+    source: str
+
+
+class LogPage(BaseModel):
+    rows: list[LogRow]
+    total: int
+
+
+class LogRowIn(BaseModel):
+    tid: str = Field(min_length=1)
+    date: date
+    opening_balance: int = Field(ge=0)
+    withdrawal: int = Field(ge=0)
+    replenishment: int = Field(ge=0)
+    closing_balance: int = Field(ge=0)
+
+
+class LogRowPatch(BaseModel):
+    """TR-37: fields not given keep their stored values."""
+
+    tid: str
+    date: date
+    opening_balance: int | None = Field(default=None, ge=0)
+    withdrawal: int | None = Field(default=None, ge=0)
+    replenishment: int | None = Field(default=None, ge=0)
+    closing_balance: int | None = Field(default=None, ge=0)
+
+
+class LogPatchRequest(BaseModel):
+    rows: list[LogRowPatch] = Field(min_length=1)
+
+
+class LogPostRequest(BaseModel):
+    rows: list[LogRowIn] = Field(min_length=1)
+
+
+class LogKey(BaseModel):
+    tid: str
+    date: date
+
+
+class LogDeleteRequest(BaseModel):
+    keys: list[LogKey] = Field(min_length=1)
+
+
+class MasterRow(BaseModel):
+    tid: str = Field(min_length=1)
+    location_name: str
+    location_type: str
+    capacity: int = Field(ge=0)
+    min_safe_balance: int = Field(ge=0)
+    replenish_cycle_days: int = Field(ge=1, le=31)
+    denomination: Literal[50000, 100000]
+    cost_per_visit: int = Field(ge=0)
+    current_fill_level: int = Field(ge=0)
+    next_visit_date: date | None = None
+    inferred: bool = False
+
+
+class MasterRows(BaseModel):
+    rows: list[MasterRow]
+
+
+class HolidayRow(BaseModel):
+    date: date
+    name: str
+    type: HolidayType
+
+
+class HolidayRows(BaseModel):
+    rows: list[HolidayRow]
