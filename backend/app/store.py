@@ -268,16 +268,33 @@ class Store:
         rows = self._q(f"SELECT {', '.join(_MASTER_COLS)} FROM atm_master ORDER BY tid")
         return [AtmMaster(*r[:9], next_visit_date=_date(r[9]), inferred=bool(r[10])) for r in rows]
 
-    def put_master(self, rows: list[AtmMaster], replace: bool = False) -> None:
+    # def put_master(self, rows: list[AtmMaster], replace: bool = False) -> None:
+    def put_master(self, rows: list[AtmMaster], replace: bool = False) -> list[str]:
+        """Upsert master rows. `replace=True` also drops the absent TIDs, except those that still have log
+        rows (F5: never cascade the log away); returns those kept TIDs, sorted."""
+        kept: list[str] = []
         with self._tx() as c:
             if replace:
                 tids = [m.tid for m in rows]
+                logged = "tid NOT IN (SELECT DISTINCT tid FROM daily_log)"
                 if tids:
-                    c.execute(f"DELETE FROM atm_master WHERE tid NOT IN ({','.join('?' * len(tids))})", tids)
+                    marks = ",".join("?" * len(tids))
+                    kept = [
+                        r[0]
+                        for r in c.execute(
+                            f"SELECT DISTINCT tid FROM daily_log WHERE tid NOT IN ({marks}) ORDER BY tid",
+                            tids,
+                        )
+                    ]
+                    # c.execute(f"DELETE FROM atm_master WHERE tid NOT IN ({','.join('?' * len(tids))})", tids)
+                    c.execute(f"DELETE FROM atm_master WHERE tid NOT IN ({marks}) AND {logged}", tids)
                 else:
-                    c.execute("DELETE FROM atm_master")
+                    # c.execute("DELETE FROM atm_master")
+                    kept = [r[0] for r in c.execute("SELECT DISTINCT tid FROM daily_log ORDER BY tid")]
+                    c.execute(f"DELETE FROM atm_master WHERE {logged}")
             self._insert_master(rows)
             self._bump()
+        return kept
 
     # ------------------------------------------------------------- holidays
     def _insert_holidays(self, df: pd.DataFrame) -> None:

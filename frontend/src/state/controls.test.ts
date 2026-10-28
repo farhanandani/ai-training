@@ -55,4 +55,32 @@ describe("controls store", () => {
     expect(useControls.getState().asOf).toBe("2026-04-16");
     expect(useControls.getState().h).toBe(10);
   });
+
+  it("an empty log (no as-of range) leaves the view unset so no read query runs", () => {
+    const empty = {
+      ...ctx,
+      min_date: null,
+      max_date: null,
+      as_of_min: null,
+      as_of_max: null,
+      scenarios: ctx.scenarios.map((s) => ({ ...s, in_range: false })),
+    } as unknown as ContextResponse;
+    useControls.getState().setContext(empty);
+    const st = useControls.getState();
+    expect(st.ctx).toBe(empty);
+    expect(st.asOf).toBe("");
+    expect(st.scenario).toBe("");
+  });
+
+  it("setScenario ignores a scenario outside the data range", () => {
+    const c = {
+      ...ctx,
+      scenarios: ctx.scenarios.map((s) => ({ ...s, in_range: s.id === "today" })),
+    } as unknown as ContextResponse;
+    useControls.getState().setContext(c);
+    useControls.getState().setScenario("today");
+    useControls.getState().setScenario("pre_lebaran_2026");
+    expect(useControls.getState().scenario).toBe("today");
+    expect(useControls.getState().asOf).toBe("2026-04-16");
+  });
 });

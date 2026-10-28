@@ -96,11 +96,21 @@ def test_master_roundtrip_and_replace(store):
     assert store.get_master()[0].capacity == m.capacity
     assert len(store.get_log()) == 7300  # upsert must not cascade-delete the log
     extra = AtmMaster("TID-NEW-0001", "X", "mall", 1, 1, 3, 100000, 1, 1, date(2026, 5, 1), True)
-    store.put_master([extra], replace=True)
-    assert [x.tid for x in store.get_master()] == ["TID-NEW-0001"]
-    assert store.get_master()[0].next_visit_date == date(2026, 5, 1)
-    assert store.get_master()[0].inferred is True
-    assert len(store.get_log()) == 0
+    # store.put_master([extra], replace=True)
+    # assert [x.tid for x in store.get_master()] == ["TID-NEW-0001"]
+    # assert store.get_master()[0].next_visit_date == date(2026, 5, 1)
+    # assert store.get_master()[0].inferred is True
+    # assert len(store.get_log()) == 0
+    # F5: replace keeps (and reports) the TIDs that still have log rows; the log is never cascaded away
+    tids = [x.tid for x in store.get_master()]
+    assert store.put_master([extra], replace=True) == tids
+    assert [x.tid for x in store.get_master()] == sorted([*tids, "TID-NEW-0001"])
+    new = next(x for x in store.get_master() if x.tid == "TID-NEW-0001")
+    assert new.next_visit_date == date(2026, 5, 1)
+    assert new.inferred is True
+    assert len(store.get_log()) == 7300
+    store.put_master([m], replace=True)  # TID-NEW-0001 has no log rows: dropped
+    assert "TID-NEW-0001" not in [x.tid for x in store.get_master()]
 
 
 def test_overrides_and_settings_and_issues(store):

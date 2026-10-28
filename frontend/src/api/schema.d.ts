@@ -435,13 +435,13 @@ export interface components {
       /** Data Source */
       data_source: string;
       /** Min Date */
-      min_date: string;
+      min_date: string | null;
       /** Max Date */
-      max_date: string;
+      max_date: string | null;
       /** As Of Min */
-      as_of_min: string;
+      as_of_min: string | null;
       /** As Of Max */
-      as_of_max: string;
+      as_of_max: string | null;
       /** Tids */
       tids: string[];
       /** Scenarios */
@@ -951,9 +951,11 @@ export interface components {
       /** Label */
       label: string;
       /** As Of */
-      as_of: string;
+      as_of: string | null;
       /** H */
       h: number;
+      /** In Range */
+      in_range: boolean;
     };
     /** SettingsResponse */
     SettingsResponse: {

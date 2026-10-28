@@ -15,6 +15,7 @@ const NAV = [
 export function Header() {
   const { data: ctx, isError } = useAppContext();
   const { scenario, asOf, h, sl, setContext, setScenario, setAsOf, setH, setSl } = useControls();
+  const noData = !!ctx && !ctx.as_of_max; // F5: no daily log loaded
 
   // apply scenario/URL once the context arrives (and re-clamp if the data range changes)
   useEffect(() => {
@@ -54,10 +55,18 @@ export function Header() {
               className={field}
               value={scenario}
               onChange={(e) => setScenario(e.target.value)}
-              disabled={!ctx}
+              // disabled={!ctx}
+              disabled={!ctx || noData}
             >
+              {noData && <option value="">No data</option>}
               {ctx?.scenarios.map((s) => (
-                <option key={s.id} value={s.id}>
+                // <option key={s.id} value={s.id}>
+                <option
+                  key={s.id}
+                  value={s.id}
+                  disabled={!s.in_range}
+                  title={s.in_range ? undefined : "Outside the loaded data's date range"}
+                >
                   {s.label}
                 </option>
               ))}
@@ -71,10 +80,13 @@ export function Header() {
               type="date"
               className={field}
               value={asOf}
-              min={ctx?.as_of_min}
-              max={ctx?.as_of_max}
+              // min={ctx?.as_of_min}
+              // max={ctx?.as_of_max}
+              min={ctx?.as_of_min ?? undefined}
+              max={ctx?.as_of_max ?? undefined}
               onChange={(e) => e.target.value && setAsOf(e.target.value)}
-              disabled={!ctx}
+              // disabled={!ctx}
+              disabled={!ctx || noData}
             />
           </label>
           <label className="flex items-center gap-1.5">
@@ -108,7 +120,8 @@ export function Header() {
             className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700"
             title="Data source"
           >
-            {ctx ? ctx.data_source : isError ? "API unreachable" : "..."}
+            {/* {ctx ? ctx.data_source : isError ? "API unreachable" : "..."} */}
+            {ctx ? (noData ? "No data loaded" : ctx.data_source) : isError ? "API unreachable" : "..."}
           </span>
           {forecasting && (
             <Spinner label={`Forecasting ${job.data?.finished ?? 0}/${job.data?.total ?? "?"}`} />

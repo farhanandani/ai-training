@@ -24,8 +24,10 @@ class ErrorResponse(BaseModel):
 class ScenarioDto(BaseModel):
     id: str
     label: str
-    as_of: str
+    # as_of: str
+    as_of: str | None  # None: "today" with no log data
     h: int
+    in_range: bool  # the scenario's as_of lies in the data's allowed as-of range
 
 
 class BusinessDefaults(BaseModel):
@@ -39,10 +41,15 @@ class BusinessDefaults(BaseModel):
 
 class ContextResponse(BaseModel):
     data_source: str
-    min_date: str
-    max_date: str
-    as_of_min: str
-    as_of_max: str
+    # min_date: str
+    # max_date: str
+    # as_of_min: str
+    # as_of_max: str
+    # F5: all None when no daily log is loaded ("No data loaded")
+    min_date: str | None
+    max_date: str | None
+    as_of_min: str | None
+    as_of_max: str | None
     tids: list[str]
     scenarios: list[ScenarioDto]
     default_scenario: str

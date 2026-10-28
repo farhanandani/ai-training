@@ -114,7 +114,17 @@ def upload(svc: Services, data: bytes, filename: str, kind: str, mode: str) -> d
         rows = _valid_master(_master_rows(df), issues)
         # if rows or not replace:  # an empty replace would cascade-delete the whole log
         if rows:  # no valid row: nothing written, no version bump (an empty replace would wipe the log)
-            store.put_master(rows, replace=replace)
+            # store.put_master(rows, replace=replace)
+            kept = store.put_master(rows, replace=replace)
+            if kept:  # F5: TIDs absent from the file but with log rows stay (their log is not deleted)
+                issues.append(
+                    Issue(
+                        "warning",
+                        "MASTER_KEPT_HAS_LOG",
+                        f"{len(kept)} ATM{'s' if len(kept) != 1 else ''} not in the file still have daily log "
+                        f"data and were kept: {', '.join(kept)} (delete their log rows to remove them)",
+                    )
+                )
     else:
         df = _valid_holidays(df, issues)
         # if len(df) or not replace:

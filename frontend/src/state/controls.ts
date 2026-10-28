@@ -22,7 +22,10 @@ const clampH = (h: number) => Math.min(H_MAX, Math.max(H_MIN, Math.round(h)));
 const isSl = (v: unknown): v is SL => SLS.includes(v as SL);
 
 function clampDate(d: string, ctx: ContextResponse): string {
-  return d < ctx.as_of_min ? ctx.as_of_min : d > ctx.as_of_max ? ctx.as_of_max : d;
+  // return d < ctx.as_of_min ? ctx.as_of_min : d > ctx.as_of_max ? ctx.as_of_max : d;
+  const lo = ctx.as_of_min ?? d;
+  const hi = ctx.as_of_max ?? d;
+  return d < lo ? lo : d > hi ? hi : d;
 }
 
 /** Keep ?as_of=&h=&sl= in the address bar (bookmarkable demo views) without adding history entries. */
@@ -50,6 +53,11 @@ export const useControls = create<ControlsState>((set, get) => ({
   ctx: null,
 
   setContext: (ctx) => {
+    if (!ctx.as_of_max) {
+      // no daily log loaded: no as-of to read at (the reads stay disabled; the UI shows "No data loaded")
+      set({ ctx, asOf: "", scenario: "" });
+      return;
+    }
     const cur = get();
     const q = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
     const fromUrl = cur.asOf === "" && q.get("as_of");
@@ -79,7 +87,8 @@ export const useControls = create<ControlsState>((set, get) => ({
   setScenario: (id) => {
     const { ctx } = get();
     const sc = ctx?.scenarios.find((s) => s.id === id);
-    if (!ctx || !sc) return;
+    // if (!ctx || !sc) return;
+    if (!ctx || !sc || !sc.in_range || !sc.as_of) return; // out of the data range: disabled in the header
     const next = { scenario: id, asOf: clampDate(sc.as_of, ctx), h: clampH(sc.h) };
     set(next);
     writeUrl({ ...next, sl: get().sl });

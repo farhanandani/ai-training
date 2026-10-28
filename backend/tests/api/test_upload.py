@@ -213,3 +213,73 @@ def test_merge_with_no_valid_rows_writes_nothing(client, kind, body):
     assert _codes(r.json()["issues"], "BAD_VALUE")
     assert r.json()["dataset_version"] == v0
     assert client.get("/api/context").json()["dataset_version"] == v0
+
+
+MASTER_HDR = (
+    "tid,location_name,location_type,capacity,min_safe_balance,replenish_cycle_days,denomination,"
+    "cost_per_visit,current_fill_level\n"
+)
+
+
+def test_master_replace_keeps_tids_with_log_data(client):
+    # F5: a master Replace must not cascade-delete the log of TIDs it leaves out.
+    tids = client.get("/api/context").json()["tids"]
+    body = MASTER_HDR + "CL-01,Client A,mall,800000000,50000000,3,100000,500000,600000000\n"
+    r = _upload(client, "master.csv", body.encode(), kind="master", mode="replace")
+    assert r.status_code == 200
+    kept = _codes(r.json()["issues"], "MASTER_KEPT_HAS_LOG")
+    assert len(kept) == 1 and kept[0]["severity"] == "warning"
+    assert all(t in kept[0]["message"] for t in tids)
+    assert client.get("/api/data/log").json()["total"] == 7300
+    masters = {m["tid"] for m in client.get("/api/data/master").json()["rows"]}
+    assert masters == {*tids, "CL-01"}
+    assert client.get("/api/context").status_code == 200
+
+
+def test_master_replace_drops_tids_without_log(client):
+    body = MASTER_HDR + "CL-01,Client A,mall,800000000,50000000,3,100000,500000,600000000\n"
+    _upload(client, "master.csv", body.encode(), kind="master")  # merge: CL-01 has no log rows
+    tids = client.get("/api/context").json()["tids"]
+    assert "CL-01" in tids
+    full = client.get("/api/data/download?kind=master").text
+    keep = "\n".join(ln for ln in full.splitlines() if not ln.startswith("CL-01,")) + "\n"
+    r = _upload(client, "master.csv", keep.encode(), kind="master", mode="replace")
+    assert r.status_code == 200 and not _codes(r.json()["issues"], "MASTER_KEPT_HAS_LOG")
+    assert "CL-01" not in client.get("/api/context").json()["tids"]
+
+
+def test_context_with_empty_log(client):
+    # F5: no log rows -> /api/context still answers (no 409 loop); the UI shows "No data loaded".
+    log = client.app.state.store.get_log()
+    keys = [{"tid": t, "date": d.isoformat()} for t, d in zip(log["tid"], log["date"], strict=True)]
+    assert client.request("DELETE", "/api/data/log", json={"keys": keys}).status_code == 200
+    r = client.get("/api/context")
+    assert r.status_code == 200, r.text
+    b = r.json()
+    assert b["as_of_min"] is None and b["as_of_max"] is None
+    assert b["min_date"] is None and b["max_date"] is None
+    assert b["scenarios"] and not any(s["in_range"] for s in b["scenarios"])
+
+
+def _client_log(tid="CL-01", start="2023-01-01", days=420, sep=","):
+    import datetime as dt
+
+    lines = [sep.join(["tid", "date", "opening_balance", "withdrawal", "replenishment", "closing_balance"])]
+    bal, d = 500_000_000, dt.date.fromisoformat(start)
+    for i in range(days):
+        w = (50 + (i * 37) % 70) * 1_000_000
+        rep = max(600_000_000 - bal, 0) if i % 4 == 0 else 0
+        op = bal
+        bal = max(op + rep - w, 0)
+        lines.append(sep.join(str(x) for x in (tid, d.isoformat(), op, op + rep - bal, rep, bal)))
+        d += dt.timedelta(days=1)
+    return "\n".join(lines)
+
+
+def test_context_scenarios_in_range(client):
+    b = client.get("/api/context").json()
+    assert all(s["in_range"] for s in b["scenarios"])
+    r = _upload(client, "client.csv", _client_log().encode(), mode="replace")
+    assert r.status_code == 200
+    sc = {s["id"]: s["in_range"] for s in client.get("/api/context").json()["scenarios"]}
+    assert sc == {"today": True, "pre_lebaran_2026": False, "year_end_2025": False}
