@@ -26,12 +26,55 @@ def _d(ly: pd.Series) -> int:
         return 1
 
 
+def _ols(ly: pd.Series, X: pd.DataFrame, d: int) -> tuple[float, pd.Series, pd.Series]:
+    """OLS of log1p(y) on the calendar features, NaN rows dropped.
+
+    d == 0: levels with a constant. d == 1: first differences, no constant (the constant differences out).
+    Returns (constant, coefficients by column, residuals ly - const - X·beta in levels, NaN kept).
+    """
+    A = X.to_numpy(dtype=float)
+    v = ly.to_numpy(dtype=float)
+    if d == 0:
+        A_fit, v_fit = np.column_stack([np.ones(len(v)), A]), v
+    else:
+        A_fit, v_fit = np.diff(A, axis=0), np.diff(v)
+    ok = np.isfinite(v_fit) & np.isfinite(A_fit).all(axis=1)
+    coef = np.linalg.lstsq(A_fit[ok], v_fit[ok], rcond=None)[0]
+    const, beta = (float(coef[0]), coef[1:]) if d == 0 else (0.0, coef)
+    resid = pd.Series(v - const - A @ beta, index=ly.index)
+    return const, pd.Series(beta, index=X.columns), resid
+
+
+def _start_params(mod: SARIMAX, ly: pd.Series, X: pd.DataFrame, d: int) -> np.ndarray:
+    """OLS exog coefficients (and constant), zeros for the ARMA terms."""
+    const, beta, _ = _ols(ly, X, d)
+    start = []
+    for name in mod.param_names:
+        if name == "intercept":
+            start.append(const)
+        elif name in beta.index:
+            start.append(float(beta[name]))
+        else:
+            start.append(0.0)
+    return np.array(start)
+
+
 def _fit(
     ly: pd.Series, X, order, seasonal_order, d: int, caught: list[str] | None = None, maxiter: int = MAXITER
 ):
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        res = SARIMAX(
+        # res = SARIMAX(
+        #     ly,
+        #     exog=X,
+        #     order=order,
+        #     seasonal_order=seasonal_order,
+        #     trend="c" if d == 0 else "n",
+        #     enforce_stationarity=False,
+        #     enforce_invertibility=False,
+        #     concentrate_scale=True,
+        # ).fit(method="lbfgs", maxiter=maxiter, disp=False, cov_type="none")
+        mod = SARIMAX(
             ly,
             exog=X,
             order=order,
@@ -40,7 +83,9 @@ def _fit(
             enforce_stationarity=False,
             enforce_invertibility=False,
             concentrate_scale=True,
-        ).fit(method="lbfgs", maxiter=maxiter, disp=False, cov_type="none")
+        )
+        start = None if X is None else _start_params(mod, ly, X, d)
+        res = mod.fit(start_params=start, method="lbfgs", maxiter=maxiter, disp=False, cov_type="none")
     if caught is not None:
         caught += [str(x.message) for x in w]
     return res
@@ -51,10 +96,13 @@ def select_sarimax_order(y: pd.Series, X: pd.DataFrame | None) -> tuple[tuple, t
     X = None if X is None else X.iloc[-GRID_DAYS:]
     ly = np.log1p(y.astype(float))
     d = _d(ly)
+    # regression with ARMA errors: remove the calendar effects by OLS, then pick the ARMA order on the residuals
+    errors = ly if X is None else _ols(ly, X, d)[2]
     best = None
     for p, q, P, Q in itertools.product((0, 1, 2), (0, 1, 2), (0, 1), (0, 1)):
         try:
-            res = _fit(ly, X, (p, d, q), (P, 0, Q, S), d, maxiter=GRID_MAXITER)
+            # res = _fit(ly, X, (p, d, q), (P, 0, Q, S), d, maxiter=GRID_MAXITER)
+            res = _fit(errors, None, (p, d, q), (P, 0, Q, S), d, maxiter=GRID_MAXITER)
         except (np.linalg.LinAlgError, ValueError):
             res = None  # candidate failed to fit; skip it
         if res is not None and np.isfinite(res.aic) and (best is None or res.aic < best[2]):

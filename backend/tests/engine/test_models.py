@@ -95,11 +95,34 @@ def test_order_grid_uses_trailing_year(monkeypatch):
         aic = 1.0
 
     def fake_fit(ly, X, order, seasonal_order, d, caught=None, maxiter=sm.MAXITER):
-        seen.append((len(ly), len(X), maxiter))
+        # seen.append((len(ly), len(X), maxiter))
+        seen.append((len(ly), X, maxiter))
         return _Res()
 
     monkeypatch.setattr(sm, "_fit", fake_fit)
     y = _series()
     select_sarimax_order(y, _X(y.index))
     assert len(seen) == 36
-    assert all(n == sm.GRID_DAYS == 365 and nx == 365 and it <= 100 for n, nx, it in seen)
+    # assert all(n == sm.GRID_DAYS == 365 and nx == 365 and it <= 100 for n, nx, it in seen)
+    # the grid runs on the OLS residuals (no exog) of the trailing year
+    assert all(n == sm.GRID_DAYS == 365 and nx is None and it <= 100 for n, nx, it in seen)
+
+
+def test_ols_start_params_seed_exog():
+    from statsmodels.tsa.statespace.sarimax import SARIMAX
+
+    import engine.models.sarimax as sm
+
+    idx = _idx()
+    flag = (np.random.default_rng(1).random(len(idx)) < 0.3).astype(float)  # independent of the weekday
+    X = pd.DataFrame({"flag": flag}, index=idx)
+    y = _series(nan_frac=0.05) * (1 + 0.8 * X["flag"])
+    ly = np.log1p(y)
+    const, beta, resid = sm._ols(ly, X, 0)
+    assert beta["flag"] == pytest.approx(np.log(1.8), abs=0.08)
+    assert resid.isna().sum() == ly.isna().sum()
+    mod = SARIMAX(ly, exog=X, order=(1, 0, 1), trend="c", concentrate_scale=True)
+    start = dict(zip(mod.param_names, sm._start_params(mod, ly, X, 0), strict=True))
+    assert start["intercept"] == pytest.approx(const)
+    assert start["flag"] == pytest.approx(beta["flag"])
+    assert start["ar.L1"] == 0.0 and start["ma.L1"] == 0.0
