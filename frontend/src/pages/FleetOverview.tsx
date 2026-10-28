@@ -130,7 +130,9 @@ export function FleetPage() {
           label="ATMs at cash-out risk"
           value={k.at_risk}
           tone={k.at_risk ? "red" : "green"}
-          hint="p90 balance falls below the safe minimum before the next visit"
+          // hint="p90 balance falls below the safe minimum before the next visit"
+          // hint="p90 balance falls below the safe minimum within the horizon"
+          hint="Below safe minimum soon, or projected to run out within the horizon"
         />
         <KpiTile
           label="Over-stocked ATMs"

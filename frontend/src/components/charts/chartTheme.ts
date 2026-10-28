@@ -1,3 +1,5 @@
+import { formatMillions, formatShortDate } from "../../lib/format";
+
 // Calm palette shared by both charts. Status colours match StatusBadge (red / amber / green).
 export const COLORS = {
   text: "#334155", // slate-700
@@ -16,11 +18,13 @@ export const COLORS = {
 } as const;
 
 /** Axis tick in IDR millions: 640000000 -> "640". The axis name carries the unit. */
-export const millions = (v: number) => `${Math.round(v / 1e6).toLocaleString("en-US")}`;
+// export const millions = (v: number) => `${Math.round(v / 1e6).toLocaleString("en-US")}`;
+export const millions = (v: number) => formatMillions(v / 1e6);
 
 /** "2026-03-12" -> "12 Mar" */
-const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const shortDate = (iso: string) => `${Number(iso.slice(8, 10))} ${MON[Number(iso.slice(5, 7)) - 1]}`;
+// const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// const shortDate = (iso: string) => `${Number(iso.slice(8, 10))} ${MON[Number(iso.slice(5, 7)) - 1]}`;
+const shortDate = formatShortDate;
 
 export const baseOption = {
   animation: false,

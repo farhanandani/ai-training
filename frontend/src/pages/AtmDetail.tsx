@@ -86,6 +86,9 @@ export function AtmDetailPage() {
         </div>
       )}
       {atm.pending && <Spinner label="Forecast is being computed..." />}
+      {!hasForecast && !atm.pending && !atm.error && (
+        <p className="text-sm text-slate-600">Not enough history to forecast this ATM (needs 280 days).</p>
+      )}
 
       {hasForecast && (
         <div className="grid gap-5 xl:grid-cols-3">

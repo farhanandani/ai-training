@@ -73,6 +73,32 @@ def test_days_of_cash():
     assert plan.status == "cash_out_risk"
 
 
+def test_status_risk_when_balance_below_min():
+    plan = project_current(_master(), _fc(q50=10 * M, q90=13 * M), 50 * M, AS_OF, 14, [_d(4)])
+    assert plan.status == "cash_out_risk"
+    assert plan.days_of_cash == 0
+
+
+def test_status_risk_beyond_next_visit():
+    # visit on day 1 tops up to 600; p50 100/day (p90 only 101) -> runs dry on day 7, after the visit
+    plan = project_current(_master(), _fc(q50=100 * M, q90=101 * M), 250 * M, AS_OF, 14, [_d(1)])
+    assert plan.status == "cash_out_risk"
+
+
+def test_status_imminent_risk_precedes_overstock():
+    # p50 balance before the visit (day 4) is high, but p90 is below min on day 1 before it
+    plan = project_current(_master(), _fc(q50=10 * M, q90=400 * M), 450 * M, AS_OF, 14, [_d(4)])
+    assert plan.status == "cash_out_risk"
+
+
+def test_status_overstock_precedes_later_cash_out():
+    # over-stocked at the visit on day 2 (p50 opening 440 > 300); p90 fine before it; later p50 cash-out
+    fc = _fc(q50=np.array([10 * M] * 2 + [300 * M] * 28), q90=np.array([20 * M] * 2 + [310 * M] * 28))
+    plan = project_current(_master(), fc, 450 * M, AS_OF, 14, [_d(2)])
+    assert plan.projection_p50.min() == 0 or plan.projection_p50[-1] < 100 * M
+    assert plan.status == "over_stocked"
+
+
 def test_need_formula_rounding():
     plan = recommend(_master(), _fc(), 450 * M, AS_OF, 14, "p90", [_d(2), _d(6)], [], merge=False)
     v = plan.visits[0]

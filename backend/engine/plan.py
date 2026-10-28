@@ -141,10 +141,16 @@ def _plan_status(
     below = np.flatnonzero(p50.closing < mn)
     days = int(below[0]) + 1 if len(below) else None
     nxt = min(visit_idx) if visit_idx else h
-    if (p90.closing[:nxt] < mn).any():
+    b0 = int(p50.opening[0]) if h else 0
+    if b0 < mn:  # already below the safe minimum: no days of cash
+        days = 0
+    # if (p90.closing[:nxt] < mn).any():
+    if b0 < mn or (p90.closing[:nxt] < mn).any():  # imminent: p90 below min before the next visit
         return "cash_out_risk", days
     if visit_idx and p50.opening[nxt] > frac * master.capacity:
         return "over_stocked", days
+    if p50.cash_out.any():  # later in the horizon: p50 projection runs dry
+        return "cash_out_risk", days
     return "ok", days
 
 

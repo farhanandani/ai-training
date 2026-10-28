@@ -17,6 +17,16 @@ export function formatRpCompact(n: number): string {
   return formatRp(n);
 }
 
+/** 1000 -> "1.000" (id-ID thousands separator, no "Rp"): chart axis ticks in millions. */
+export function formatMillions(n: number): string {
+  return ID.format(Math.round(n));
+}
+
+/** "2026-03-12" -> "12 Mar" (no Date parsing). */
+export function formatShortDate(iso: string): string {
+  return `${Number(iso.slice(8, 10))} ${MONTHS[Number(iso.slice(5, 7)) - 1]}`;
+}
+
 /** "2026-03-12" -> "12 Mar 2026" (no Date parsing, so no timezone shift). */
 export function formatDate(iso: string): string {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);

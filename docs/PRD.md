@@ -152,10 +152,14 @@ Notation for one ATM at as-of date **T** (all forecasts made with data ≤ T):
 - **Scheduled visits**: use `next_visit_date` if it is set. Otherwise infer the schedule phase from the log: take all replenishment dates in the last 90 days, compute `date mod c`, and use the **most common phase**. This way emergency refills, which are off-phase, are ignored. Then project every `c` days through the horizon. The user can edit the schedule in the planner. **[Claude's call]**
 - Project the balance under the **current policy** (top up to `current_fill_level` on each visit) using `p50` and `p90` demand.
 - **Status**
-  - **Cash-out risk**: the p90 projected balance falls below `min` before the next scheduled visit.
+  <!-- old: - **Cash-out risk**: the p90 projected balance falls below `min` before the next scheduled visit. -->
+  <!-- old: - **Cash-out risk**: the current balance is already below `min`, or the p90 projected closing balance falls below `min` on any day within the horizon. -->
+  - **Cash-out risk**: the current balance is already below `min`, or the p90 projected balance falls below `min` before the next scheduled visit (within the horizon if there is no visit).
   - **Over-stocked**: at the next scheduled visit, the p50 projected balance is more than **30% of `cap`**. The threshold is configurable. With the dummy data this flags hospital, campus, and residential. **[Claude's call]**
+  - **Cash-out risk (later)**: if not over-stocked, also cash-out risk when the p50 projection (same plan) runs out of cash (closing 0 with unmet demand) anywhere within the horizon.
   - **OK**: otherwise.
-- *Days of cash left* = days until the p50 projected balance falls below `min`.
+<!-- old: - *Days of cash left* = days until the p50 projected balance falls below `min`. -->
+- *Days of cash left* = days until the p50 projected balance falls below `min`; **0** if the current balance is already below `min`.
 - **Demo scenarios** **[Claude's call]**: preset buttons in the header set the as-of date and horizon in one click. *Today* = last date in data, H 14. *Pre-Lebaran 2026* = as-of 2026-03-06, H 21. *Year-end 2025* = as-of 2025-12-15, H 21. The app opens on **Pre-Lebaran 2026**, so the first screen already shows both cash-out risk and over-stock.
 
 ### 6.2 Recommended amount per visit

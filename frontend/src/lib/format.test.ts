@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatRp, formatRpCompact } from "./format";
+import { formatDate, formatMillions, formatRp, formatRpCompact } from "./format";
 
 describe("format", () => {
+  it("formatMillions uses dot thousands separators", () => {
+    expect(formatMillions(1000)).toBe("1.000");
+  });
   it("formatRp uses dot thousands separators", () => {
     expect(formatRp(640000000)).toBe("Rp 640.000.000");
   });
