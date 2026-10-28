@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useVersionedState } from "../lib/useVersionedState";
+import { parseCount } from "../lib/parseCount";
 import { AgGridReact } from "ag-grid-react";
 import type { CellValueChangedEvent, ColDef } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
@@ -44,10 +45,10 @@ type Cb = { onSuccess: (r: WriteResponse) => void; onError: (e: unknown) => void
 const keyOf = (r: { tid: string; date: string }) => `${r.tid}|${r.date}`;
 const errText = (e: unknown) => (e instanceof ApiRequestError ? `${e.code}: ${e.message}` : String(e));
 /** Strict non-negative integer; null when empty, negative, fractional or with stray characters. */
-const parseCount = (v: unknown): number | null => {
-  const t = String(v ?? "").trim().replace(/\./g, "");
-  return /^\d+$/.test(t) ? Number(t) : null;
-};
+// const parseCount = (v: unknown): number | null => {
+//   const t = String(v ?? "").trim().replace(/\./g, "");
+//   return /^\d+$/.test(t) ? Number(t) : null;
+// };
 const BAD_NUM = "Enter a whole number of 0 or more (no decimals, no minus sign).";
 const SELECTION = { mode: "multiRow", checkboxes: true, headerCheckbox: true, enableClickSelection: false } as const;
 // const int = (v: unknown) => Math.max(0, Math.round(Number(String(v).replace(/\D/g, "")) || 0));
@@ -490,7 +491,15 @@ export function DataEditorPage() {
           <a className={btn} href={`/api/data/download?kind=${tab}`} download>
             Download {tabs.find((t) => t.id === tab)?.label}
           </a>
-          <button type="button" className={btn} onClick={() => setConfirmReset(true)}>
+          {/* <button type="button" className={btn} onClick={() => setConfirmReset(true)}> */}
+          <button
+            type="button"
+            className={btn}
+            onClick={() => {
+              setResetErr(null);
+              setConfirmReset(true);
+            }}
+          >
             Reset to dummy data
           </button>
         </div>
@@ -541,7 +550,15 @@ export function DataEditorPage() {
               </p>
             )}
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" className={btn} onClick={() => setConfirmReset(false)}>
+              {/* <button type="button" className={btn} onClick={() => setConfirmReset(false)}> */}
+              <button
+                type="button"
+                className={btn}
+                onClick={() => {
+                  setResetErr(null);
+                  setConfirmReset(false);
+                }}
+              >
                 Cancel
               </button>
               <button
