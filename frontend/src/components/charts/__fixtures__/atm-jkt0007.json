@@ -1,0 +1,636 @@
+{
+  "tid": "TID-JKT-0007",
+  "master": {
+    "tid": "TID-JKT-0007",
+    "location_name": "Terminal Pulo Gebang",
+    "location_type": "bus_terminal",
+    "capacity": 900000000,
+    "min_safe_balance": 110000000,
+    "replenish_cycle_days": 4,
+    "denomination": 50000,
+    "cost_per_visit": 1500000,
+    "current_fill_level": 820000000,
+    "next_visit_date": null,
+    "inferred": false
+  },
+  "status": "ok",
+  "days_of_cash": 4,
+  "history": [
+    { "date": "2025-12-06", "withdrawal": 153250000, "closing_balance": 485450000, "replenishment": 0 },
+    { "date": "2025-12-07", "withdrawal": 204900000, "closing_balance": 280550000, "replenishment": 0 },
+    { "date": "2025-12-08", "withdrawal": 152150000, "closing_balance": 128400000, "replenishment": 0 },
+    {
+      "date": "2025-12-09",
+      "withdrawal": 135800000,
+      "closing_balance": 684200000,
+      "replenishment": 691600000
+    },
+    { "date": "2025-12-10", "withdrawal": 149450000, "closing_balance": 534750000, "replenishment": 0 },
+    { "date": "2025-12-11", "withdrawal": 188950000, "closing_balance": 345800000, "replenishment": 0 },
+    { "date": "2025-12-12", "withdrawal": 199150000, "closing_balance": 146650000, "replenishment": 0 },
+    {
+      "date": "2025-12-13",
+      "withdrawal": 160250000,
+      "closing_balance": 659750000,
+      "replenishment": 673350000
+    },
+    { "date": "2025-12-14", "withdrawal": 151900000, "closing_balance": 507850000, "replenishment": 0 },
+    { "date": "2025-12-15", "withdrawal": 143700000, "closing_balance": 364150000, "replenishment": 0 },
+    { "date": "2025-12-16", "withdrawal": 134950000, "closing_balance": 229200000, "replenishment": 0 },
+    {
+      "date": "2025-12-17",
+      "withdrawal": 149250000,
+      "closing_balance": 670750000,
+      "replenishment": 590800000
+    },
+    { "date": "2025-12-18", "withdrawal": 171550000, "closing_balance": 499200000, "replenishment": 0 },
+    { "date": "2025-12-19", "withdrawal": 218950000, "closing_balance": 280250000, "replenishment": 0 },
+    { "date": "2025-12-20", "withdrawal": 241150000, "closing_balance": 39100000, "replenishment": 0 },
+    {
+      "date": "2025-12-21",
+      "withdrawal": 260650000,
+      "closing_balance": 559350000,
+      "replenishment": 780900000
+    },
+    { "date": "2025-12-22", "withdrawal": 182650000, "closing_balance": 376700000, "replenishment": 0 },
+    { "date": "2025-12-23", "withdrawal": 167250000, "closing_balance": 209450000, "replenishment": 0 },
+    { "date": "2025-12-24", "withdrawal": 194600000, "closing_balance": 14850000, "replenishment": 0 },
+    {
+      "date": "2025-12-25",
+      "withdrawal": 225350000,
+      "closing_balance": 594650000,
+      "replenishment": 805150000
+    },
+    { "date": "2025-12-26", "withdrawal": 357550000, "closing_balance": 237100000, "replenishment": 0 },
+    { "date": "2025-12-27", "withdrawal": 237100000, "closing_balance": 0, "replenishment": 0 },
+    { "date": "2025-12-28", "withdrawal": 0, "closing_balance": 0, "replenishment": 0 },
+    {
+      "date": "2025-12-29",
+      "withdrawal": 269350000,
+      "closing_balance": 550650000,
+      "replenishment": 820000000
+    },
+    { "date": "2025-12-30", "withdrawal": 213450000, "closing_balance": 337200000, "replenishment": 0 },
+    { "date": "2025-12-31", "withdrawal": 195150000, "closing_balance": 142050000, "replenishment": 0 },
+    { "date": "2026-01-01", "withdrawal": 142050000, "closing_balance": 0, "replenishment": 0 },
+    {
+      "date": "2026-01-02",
+      "withdrawal": 218000000,
+      "closing_balance": 602000000,
+      "replenishment": 820000000
+    },
+    { "date": "2026-01-03", "withdrawal": 170750000, "closing_balance": 431250000, "replenishment": 0 },
+    { "date": "2026-01-04", "withdrawal": 158250000, "closing_balance": 273000000, "replenishment": 0 },
+    { "date": "2026-01-05", "withdrawal": 127750000, "closing_balance": 145250000, "replenishment": 0 },
+    {
+      "date": "2026-01-06",
+      "withdrawal": 140000000,
+      "closing_balance": 680000000,
+      "replenishment": 674750000
+    },
+    { "date": "2026-01-07", "withdrawal": 130900000, "closing_balance": 549100000, "replenishment": 0 },
+    { "date": "2026-01-08", "withdrawal": 140200000, "closing_balance": 408900000, "replenishment": 0 },
+    { "date": "2026-01-09", "withdrawal": 207600000, "closing_balance": 201300000, "replenishment": 0 },
+    {
+      "date": "2026-01-10",
+      "withdrawal": 155100000,
+      "closing_balance": 664900000,
+      "replenishment": 618700000
+    },
+    { "date": "2026-01-11", "withdrawal": 148400000, "closing_balance": 516500000, "replenishment": 0 },
+    { "date": "2026-01-12", "withdrawal": 154850000, "closing_balance": 361650000, "replenishment": 0 },
+    { "date": "2026-01-13", "withdrawal": 129250000, "closing_balance": 232400000, "replenishment": 0 },
+    {
+      "date": "2026-01-14",
+      "withdrawal": 147250000,
+      "closing_balance": 672750000,
+      "replenishment": 587600000
+    },
+    { "date": "2026-01-15", "withdrawal": 185750000, "closing_balance": 487000000, "replenishment": 0 },
+    { "date": "2026-01-16", "withdrawal": 192850000, "closing_balance": 294150000, "replenishment": 0 },
+    { "date": "2026-01-17", "withdrawal": 165850000, "closing_balance": 128300000, "replenishment": 0 },
+    {
+      "date": "2026-01-18",
+      "withdrawal": 153650000,
+      "closing_balance": 666350000,
+      "replenishment": 691700000
+    },
+    { "date": "2026-01-19", "withdrawal": 129250000, "closing_balance": 537100000, "replenishment": 0 },
+    { "date": "2026-01-20", "withdrawal": 132600000, "closing_balance": 404500000, "replenishment": 0 },
+    { "date": "2026-01-21", "withdrawal": 157050000, "closing_balance": 247450000, "replenishment": 0 },
+    {
+      "date": "2026-01-22",
+      "withdrawal": 146650000,
+      "closing_balance": 673350000,
+      "replenishment": 572550000
+    },
+    { "date": "2026-01-23", "withdrawal": 165200000, "closing_balance": 508150000, "replenishment": 0 },
+    { "date": "2026-01-24", "withdrawal": 152750000, "closing_balance": 355400000, "replenishment": 0 },
+    { "date": "2026-01-25", "withdrawal": 205650000, "closing_balance": 149750000, "replenishment": 0 },
+    {
+      "date": "2026-01-26",
+      "withdrawal": 180050000,
+      "closing_balance": 639950000,
+      "replenishment": 670250000
+    },
+    { "date": "2026-01-27", "withdrawal": 134100000, "closing_balance": 505850000, "replenishment": 0 },
+    { "date": "2026-01-28", "withdrawal": 183650000, "closing_balance": 322200000, "replenishment": 0 },
+    { "date": "2026-01-29", "withdrawal": 155200000, "closing_balance": 167000000, "replenishment": 0 },
+    {
+      "date": "2026-01-30",
+      "withdrawal": 261100000,
+      "closing_balance": 558900000,
+      "replenishment": 653000000
+    },
+    { "date": "2026-01-31", "withdrawal": 166800000, "closing_balance": 392100000, "replenishment": 0 },
+    { "date": "2026-02-01", "withdrawal": 154000000, "closing_balance": 238100000, "replenishment": 0 },
+    { "date": "2026-02-02", "withdrawal": 135850000, "closing_balance": 102250000, "replenishment": 0 },
+    {
+      "date": "2026-02-03",
+      "withdrawal": 150950000,
+      "closing_balance": 669050000,
+      "replenishment": 717750000
+    },
+    { "date": "2026-02-04", "withdrawal": 143550000, "closing_balance": 525500000, "replenishment": 0 },
+    { "date": "2026-02-05", "withdrawal": 183700000, "closing_balance": 341800000, "replenishment": 0 },
+    { "date": "2026-02-06", "withdrawal": 187750000, "closing_balance": 154050000, "replenishment": 0 },
+    {
+      "date": "2026-02-07",
+      "withdrawal": 169000000,
+      "closing_balance": 651000000,
+      "replenishment": 665950000
+    },
+    { "date": "2026-02-08", "withdrawal": 172050000, "closing_balance": 478950000, "replenishment": 0 },
+    { "date": "2026-02-09", "withdrawal": 171250000, "closing_balance": 307700000, "replenishment": 0 },
+    { "date": "2026-02-10", "withdrawal": 139550000, "closing_balance": 168150000, "replenishment": 0 },
+    {
+      "date": "2026-02-11",
+      "withdrawal": 126900000,
+      "closing_balance": 693100000,
+      "replenishment": 651850000
+    },
+    { "date": "2026-02-12", "withdrawal": 156000000, "closing_balance": 537100000, "replenishment": 0 },
+    { "date": "2026-02-13", "withdrawal": 150650000, "closing_balance": 386450000, "replenishment": 0 },
+    { "date": "2026-02-14", "withdrawal": 199150000, "closing_balance": 187300000, "replenishment": 0 },
+    {
+      "date": "2026-02-15",
+      "withdrawal": 136200000,
+      "closing_balance": 683800000,
+      "replenishment": 632700000
+    },
+    { "date": "2026-02-16", "withdrawal": 179750000, "closing_balance": 504050000, "replenishment": 0 },
+    { "date": "2026-02-17", "withdrawal": 166450000, "closing_balance": 337600000, "replenishment": 0 },
+    { "date": "2026-02-18", "withdrawal": 170950000, "closing_balance": 166650000, "replenishment": 0 },
+    {
+      "date": "2026-02-19",
+      "withdrawal": 188350000,
+      "closing_balance": 631650000,
+      "replenishment": 653350000
+    },
+    { "date": "2026-02-20", "withdrawal": 231850000, "closing_balance": 399800000, "replenishment": 0 },
+    { "date": "2026-02-21", "withdrawal": 202900000, "closing_balance": 196900000, "replenishment": 0 },
+    { "date": "2026-02-22", "withdrawal": 175400000, "closing_balance": 21500000, "replenishment": 0 },
+    {
+      "date": "2026-02-23",
+      "withdrawal": 159050000,
+      "closing_balance": 660950000,
+      "replenishment": 798500000
+    },
+    { "date": "2026-02-24", "withdrawal": 168050000, "closing_balance": 492900000, "replenishment": 0 },
+    { "date": "2026-02-25", "withdrawal": 145800000, "closing_balance": 347100000, "replenishment": 0 },
+    { "date": "2026-02-26", "withdrawal": 180000000, "closing_balance": 167100000, "replenishment": 0 },
+    {
+      "date": "2026-02-27",
+      "withdrawal": 234450000,
+      "closing_balance": 585550000,
+      "replenishment": 652900000
+    },
+    { "date": "2026-02-28", "withdrawal": 216450000, "closing_balance": 369100000, "replenishment": 0 },
+    { "date": "2026-03-01", "withdrawal": 210000000, "closing_balance": 159100000, "replenishment": 0 },
+    { "date": "2026-03-02", "withdrawal": 159100000, "closing_balance": 0, "replenishment": 0 },
+    {
+      "date": "2026-03-03",
+      "withdrawal": 163700000,
+      "closing_balance": 656300000,
+      "replenishment": 820000000
+    },
+    { "date": "2026-03-04", "withdrawal": 170050000, "closing_balance": 486250000, "replenishment": 0 },
+    { "date": "2026-03-05", "withdrawal": 193550000, "closing_balance": 292700000, "replenishment": 0 },
+    { "date": "2026-03-06", "withdrawal": 212350000, "closing_balance": 80350000, "replenishment": 0 }
+  ],
+  "forecast": [
+    {
+      "date": "2026-03-07",
+      "q10": 162497654,
+      "q50": 197122435,
+      "q80": 223783292,
+      "q90": 239125018,
+      "q95": 252584311
+    },
+    {
+      "date": "2026-03-08",
+      "q10": 155494619,
+      "q50": 188642917,
+      "q80": 214168634,
+      "q90": 228857760,
+      "q95": 241744863
+    },
+    {
+      "date": "2026-03-09",
+      "q10": 143379715,
+      "q50": 173945393,
+      "q80": 197482377,
+      "q90": 211027061,
+      "q95": 222910119
+    },
+    {
+      "date": "2026-03-10",
+      "q10": 199726053,
+      "q50": 242303641,
+      "q80": 275090350,
+      "q90": 293957917,
+      "q95": 310510860
+    },
+    {
+      "date": "2026-03-11",
+      "q10": 208444019,
+      "q50": 252880102,
+      "q80": 287097939,
+      "q90": 306789068,
+      "q95": 324064541
+    },
+    {
+      "date": "2026-03-12",
+      "q10": 217857162,
+      "q50": 264299939,
+      "q80": 300063023,
+      "q90": 320643385,
+      "q95": 338699003
+    },
+    {
+      "date": "2026-03-13",
+      "q10": 266400944,
+      "q50": 323192282,
+      "q80": 366924235,
+      "q90": 392090393,
+      "q95": 414169235
+    },
+    {
+      "date": "2026-03-14",
+      "q10": 249475686,
+      "q50": 302658898,
+      "q80": 343612428,
+      "q90": 367179704,
+      "q95": 387855810
+    },
+    {
+      "date": "2026-03-15",
+      "q10": 398255020,
+      "q50": 483155001,
+      "q80": 548531908,
+      "q90": 586153956,
+      "q95": 619160631
+    },
+    {
+      "date": "2026-03-16",
+      "q10": 367219433,
+      "q50": 445503249,
+      "q80": 505785404,
+      "q90": 540475605,
+      "q95": 570910106
+    },
+    {
+      "date": "2026-03-17",
+      "q10": 333343075,
+      "q50": 404405132,
+      "q80": 459126198,
+      "q90": 490616194,
+      "q95": 518243082
+    },
+    {
+      "date": "2026-03-18",
+      "q10": 423960910,
+      "q50": 514340871,
+      "q80": 583937616,
+      "q90": 623988028,
+      "q95": 659125162
+    },
+    {
+      "date": "2026-03-19",
+      "q10": 363603983,
+      "q50": 441117059,
+      "q80": 500805707,
+      "q90": 535154367,
+      "q95": 565289225
+    },
+    {
+      "date": "2026-03-20",
+      "q10": 235695387,
+      "q50": 285940916,
+      "q80": 324632294,
+      "q90": 346897784,
+      "q95": 366431803
+    },
+    {
+      "date": "2026-03-21",
+      "q10": 220720946,
+      "q50": 267774224,
+      "q80": 304007422,
+      "q90": 324858318,
+      "q95": 343151281
+    },
+    {
+      "date": "2026-03-22",
+      "q10": 211297810,
+      "q50": 256342264,
+      "q80": 291028574,
+      "q90": 310989293,
+      "q95": 328501283
+    },
+    {
+      "date": "2026-03-23",
+      "q10": 194831597,
+      "q50": 236365786,
+      "q80": 268349029,
+      "q90": 286754230,
+      "q95": 302901530
+    },
+    {
+      "date": "2026-03-24",
+      "q10": 176858189,
+      "q50": 214560807,
+      "q80": 243593565,
+      "q90": 260300868,
+      "q95": 274958563
+    },
+    {
+      "date": "2026-03-25",
+      "q10": 207780194,
+      "q50": 252074763,
+      "q80": 286183628,
+      "q90": 305812047,
+      "q95": 323032503
+    },
+    {
+      "date": "2026-03-26",
+      "q10": 217163366,
+      "q50": 263458239,
+      "q80": 299107430,
+      "q90": 319622251,
+      "q95": 337620369
+    },
+    {
+      "date": "2026-03-27",
+      "q10": 182501371,
+      "q50": 221407003,
+      "q80": 251366136,
+      "q90": 268606535,
+      "q95": 283731927
+    }
+  ],
+  "actual_after": [
+    { "date": "2026-03-07", "withdrawal": 176000000 },
+    { "date": "2026-03-08", "withdrawal": 227950000 },
+    { "date": "2026-03-09", "withdrawal": 187150000 },
+    { "date": "2026-03-10", "withdrawal": 165000000 },
+    { "date": "2026-03-11", "withdrawal": 203050000 },
+    { "date": "2026-03-12", "withdrawal": 263400000 },
+    { "date": "2026-03-13", "withdrawal": 294800000 },
+    { "date": "2026-03-14", "withdrawal": 58750000 },
+    { "date": "2026-03-15", "withdrawal": 380500000 },
+    { "date": "2026-03-16", "withdrawal": 428050000 },
+    { "date": "2026-03-17", "withdrawal": 11450000 },
+    { "date": "2026-03-18", "withdrawal": 369250000 },
+    { "date": "2026-03-19", "withdrawal": 523150000 },
+    { "date": "2026-03-20", "withdrawal": 278550000 },
+    { "date": "2026-03-21", "withdrawal": 303300000 },
+    { "date": "2026-03-22", "withdrawal": 261500000 },
+    { "date": "2026-03-23", "withdrawal": 244250000 },
+    { "date": "2026-03-24", "withdrawal": 243100000 },
+    { "date": "2026-03-25", "withdrawal": 245600000 },
+    { "date": "2026-03-26", "withdrawal": 87050000 },
+    { "date": "2026-03-27", "withdrawal": 184250000 }
+  ],
+  "projection": {
+    "current": [
+      { "date": "2026-03-07", "p50": 622877565, "p90": 580874982 },
+      { "date": "2026-03-08", "p50": 434234648, "p90": 352017222 },
+      { "date": "2026-03-09", "p50": 260289255, "p90": 140990161 },
+      { "date": "2026-03-10", "p50": 17985614, "p90": 0 },
+      { "date": "2026-03-11", "p50": 567119898, "p90": 513210932 },
+      { "date": "2026-03-12", "p50": 302819959, "p90": 192567547 },
+      { "date": "2026-03-13", "p50": 0, "p90": 0 },
+      { "date": "2026-03-14", "p50": 0, "p90": 0 },
+      { "date": "2026-03-15", "p50": 336844999, "p90": 233846044 },
+      { "date": "2026-03-16", "p50": 0, "p90": 0 },
+      { "date": "2026-03-17", "p50": 0, "p90": 0 },
+      { "date": "2026-03-18", "p50": 0, "p90": 0 },
+      { "date": "2026-03-19", "p50": 378882941, "p90": 284845633 },
+      { "date": "2026-03-20", "p50": 92942025, "p90": 0 },
+      { "date": "2026-03-21", "p50": 0, "p90": 0 },
+      { "date": "2026-03-22", "p50": 0, "p90": 0 },
+      { "date": "2026-03-23", "p50": 583634214, "p90": 533245770 },
+      { "date": "2026-03-24", "p50": 369073407, "p90": 272944902 },
+      { "date": "2026-03-25", "p50": 116998644, "p90": 0 },
+      { "date": "2026-03-26", "p50": 0, "p90": 0 },
+      { "date": "2026-03-27", "p50": 598592997, "p90": 551393465 }
+    ],
+    "recommended": [
+      { "date": "2026-03-07", "p50": 702877565, "sl": 660874982 },
+      { "date": "2026-03-08", "p50": 514234648, "sl": 432017222 },
+      { "date": "2026-03-09", "p50": 340289255, "sl": 220990161 },
+      { "date": "2026-03-10", "p50": 280985614, "sl": 110032244 },
+      { "date": "2026-03-11", "p50": 647119898, "sl": 593193176 },
+      { "date": "2026-03-12", "p50": 382819959, "sl": 272549791 },
+      { "date": "2026-03-13", "p50": 576807718, "sl": 477209398 },
+      { "date": "2026-03-14", "p50": 274148820, "sl": 110029694 },
+      { "date": "2026-03-15", "p50": 416844999, "sl": 313825738 },
+      { "date": "2026-03-16", "p50": 454496751, "sl": 359500133 },
+      { "date": "2026-03-17", "p50": 495594868, "sl": 409333939 },
+      { "date": "2026-03-18", "p50": 305953997, "sl": 110045911 },
+      { "date": "2026-03-19", "p50": 458882941, "sl": 364841544 },
+      { "date": "2026-03-20", "p50": 614059084, "sl": 553093760 },
+      { "date": "2026-03-21", "p50": 346284860, "sl": 228235442 },
+      { "date": "2026-03-22", "p50": 282742596, "sl": 110046149 },
+      { "date": "2026-03-23", "p50": 663634214, "sl": 613241919 },
+      { "date": "2026-03-24", "p50": 449073407, "sl": 352941051 },
+      { "date": "2026-03-25", "p50": 579498644, "sl": 429629004 },
+      { "date": "2026-03-26", "p50": 316040405, "sl": 110006753 },
+      { "date": "2026-03-27", "p50": 678592997, "sl": 631350218 }
+    ]
+  },
+  "visits": [
+    {
+      "date": "2026-03-07",
+      "kind": "scheduled",
+      "amount": 819650000,
+      "tier1_need": 819650000,
+      "reason": "Scheduled visit",
+      "flags": [],
+      "manual": false
+    },
+    {
+      "date": "2026-03-10",
+      "kind": "extra",
+      "amount": 183000000,
+      "tier1_need": 131350000,
+      "reason": "Below safe minimum on 10 Mar (pre-Lebaran +78%)",
+      "flags": [],
+      "manual": false
+    },
+    {
+      "date": "2026-03-11",
+      "kind": "scheduled",
+      "amount": 789950000,
+      "tier1_need": 789950000,
+      "reason": "Scheduled visit",
+      "flags": [],
+      "manual": false
+    },
+    {
+      "date": "2026-03-13",
+      "kind": "extra",
+      "amount": 596750000,
+      "tier1_need": 463350000,
+      "reason": "Below safe minimum on 13 Mar (pre-Lebaran +78%)",
+      "flags": [],
+      "manual": false
+    },
+    {
+      "date": "2026-03-15",
+      "kind": "scheduled",
+      "amount": 789950000,
+      "tier1_need": 789950000,
+      "reason": "Scheduled visit",
+      "flags": [],
+      "manual": false
+    },
+    {
+      "date": "2026-03-16",
+      "kind": "extra",
+      "amount": 586150000,
+      "tier1_need": 586150000,
+      "reason": "Below safe minimum on 16 Mar (pre-Lebaran +197%)",
+      "flags": [],
+      "manual": false
+    },
+    {
+      "date": "2026-03-17",
+      "kind": "extra",
+      "amount": 540450000,
+      "tier1_need": 540450000,
+      "reason": "Below safe minimum on 17 Mar (pre-Lebaran +197%)",
+      "flags": [],
+      "manual": false
+    },
+    {
+      "date": "2026-03-18",
+      "kind": "extra",
+      "amount": 324700000,
+      "tier1_need": 215050000,
+      "reason": "Below safe minimum on 18 Mar (pre-Lebaran +197%)",
+      "flags": [],
+      "manual": false
+    },
+    {
+      "date": "2026-03-19",
+      "kind": "scheduled",
+      "amount": 789950000,
+      "tier1_need": 789950000,
+      "reason": "Scheduled visit",
+      "flags": [],
+      "manual": false
+    },
+    {
+      "date": "2026-03-20",
+      "kind": "extra",
+      "amount": 535150000,
+      "tier1_need": 535150000,
+      "reason": "Below safe minimum on 20 Mar (Lebaran holiday +58%)",
+      "flags": [],
+      "manual": false
+    },
+    {
+      "date": "2026-03-22",
+      "kind": "extra",
+      "amount": 192800000,
+      "tier1_need": 138150000,
+      "reason": "Below safe minimum on 22 Mar (Lebaran holiday +58%)",
+      "flags": [],
+      "manual": false
+    },
+    {
+      "date": "2026-03-23",
+      "kind": "scheduled",
+      "amount": 789950000,
+      "tier1_need": 789950000,
+      "reason": "Scheduled visit",
+      "flags": [],
+      "manual": false
+    },
+    {
+      "date": "2026-03-25",
+      "kind": "extra",
+      "amount": 382500000,
+      "tier1_need": 272600000,
+      "reason": "Below safe minimum on 25 Mar (Lebaran holiday +58%)",
+      "flags": [],
+      "manual": false
+    },
+    {
+      "date": "2026-03-27",
+      "kind": "scheduled",
+      "amount": 789950000,
+      "tier1_need": 789950000,
+      "reason": "Scheduled visit",
+      "flags": [],
+      "manual": false
+    }
+  ],
+  "explanations": {
+    "2026-03-07": ["THR +16%"],
+    "2026-03-08": ["THR +16%"],
+    "2026-03-09": ["THR +16%"],
+    "2026-03-10": ["pre-Lebaran +78%"],
+    "2026-03-11": ["pre-Lebaran +78%"],
+    "2026-03-12": ["pre-Lebaran +78%"],
+    "2026-03-13": ["pre-Lebaran +78%"],
+    "2026-03-14": ["pre-Lebaran +78%"],
+    "2026-03-15": ["pre-Lebaran +197%"],
+    "2026-03-16": ["pre-Lebaran +197%"],
+    "2026-03-17": ["pre-Lebaran +197%"],
+    "2026-03-18": ["pre-Lebaran +197%", "pre-holiday +22%"],
+    "2026-03-19": ["pre-Lebaran +197%"],
+    "2026-03-20": ["Lebaran holiday +58%"],
+    "2026-03-21": ["Lebaran holiday +58%"],
+    "2026-03-22": ["Lebaran holiday +58%"],
+    "2026-03-23": ["Lebaran holiday +58%"],
+    "2026-03-24": ["Lebaran holiday +58%"],
+    "2026-03-25": ["Lebaran holiday +58%", "payday +13%"],
+    "2026-03-26": ["Lebaran holiday +58%", "payday +13%"],
+    "2026-03-27": ["payday +13%", "post-Lebaran return +8%"]
+  },
+  "model": {
+    "name": "sarimax",
+    "fallback": false,
+    "orders": { "order": [2, 0, 2], "seasonal_order": [0, 0, 0, 7], "aic": -353.49334315780294 },
+    "backtest_stale": false
+  },
+  "metrics": { "wape": 0.0983, "mape": 0.0951, "mae": 16705283, "coverage": 0.8957, "n": 163 },
+  "holidays_in_view": [
+    { "date": "2025-12-25", "name": "Christmas Day", "type": "christmas" },
+    { "date": "2025-12-26", "name": "Christmas Collective Leave", "type": "cuti_bersama" },
+    { "date": "2026-01-01", "name": "New Year's Day", "type": "new_year" },
+    { "date": "2026-01-16", "name": "Isra Mi'raj", "type": "national" },
+    { "date": "2026-02-17", "name": "Chinese New Year", "type": "national" },
+    { "date": "2026-03-18", "name": "Nyepi Collective Leave", "type": "cuti_bersama" },
+    { "date": "2026-03-19", "name": "Nyepi", "type": "national" },
+    { "date": "2026-03-20", "name": "Idul Fitri 1447 H (day 1)", "type": "idul_fitri" },
+    { "date": "2026-03-21", "name": "Idul Fitri 1447 H (day 2)", "type": "idul_fitri" },
+    { "date": "2026-03-23", "name": "Idul Fitri Collective Leave", "type": "cuti_bersama" },
+    { "date": "2026-03-24", "name": "Idul Fitri Collective Leave", "type": "cuti_bersama" }
+  ],
+  "pending": false,
+  "job_id": null,
+  "error": null
+}
