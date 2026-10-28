@@ -111,6 +111,13 @@ def _round_up(x: int, step: int) -> int:
     return -(-int(x) // step) * step
 
 
+def need_window_end(i: int, loading_idx: list[int], cycle: int) -> int:
+    """Last day covered by a load on day i: the day before the next *loading* visit (one that is not a
+    skip), else i + cycle - 1 (PRD 6.2). Shared by recommend and allocation."""
+    nxt = min((j for j in loading_idx if j > i), default=None)
+    return nxt - 1 if nxt is not None else i + cycle - 1
+
+
 def size_load(
     q: np.ndarray, q50: np.ndarray, i: int, end: int, bal: int, cap: int, mn: int, step: int
 ) -> tuple[int, int, int]:
@@ -256,8 +263,9 @@ def recommend(
             kind, reason = "extra", f"Below safe minimum on {_fmt_day(d)}" + (f" ({top[0]})" if top else "")
         else:
             continue
-        nxt = next((j for j in sched if j > i), None)
-        amount, tier1, need = size(i, nxt - 1 if nxt is not None else i + cycle - 1, bal)
+        # nxt = next((j for j in sched if j > i), None)
+        # amount, tier1, need = size(i, nxt - 1 if nxt is not None else i + cycle - 1, bal)
+        amount, tier1, need = size(i, need_window_end(i, sched, cycle), bal)  # later skips not known yet
         flags: list[str] = []
         if need <= 0:
             amount, flags, reason = 0, ["skip"], "Skip: balance covers demand until the next visit"
@@ -276,7 +284,8 @@ def recommend(
         ia, ib = _idx(a.date, as_of), _idx(b.date, as_of)
         bal = _bal_before(b0, qh, loads, cap, ia)
         if a.amount + b.amount <= cap - bal:
-            amount, tier1, _ = size(ia, after - 1 if after is not None else ib + cycle - 1, bal)
+            # amount, tier1, _ = size(ia, after - 1 if after is not None else ib + cycle - 1, bal)
+            amount, tier1, _ = size(ia, need_window_end(ib, [_idx(v.date, as_of) for v in act], cycle), bal)
             trial = loads.copy()
             trial[ia], trial[ib] = amount, 0
             closing = simulate_balance(b0, qh, trial, cap).closing

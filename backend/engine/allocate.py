@@ -3,12 +3,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import date, timedelta
+
+# from datetime import date, timedelta
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import numpy as np
 
-from .plan import SL_COL, AtmPlan, Visit, _bal_before, _idx, _q, apply_loads, simulate_balance, size_load
+# from .plan import SL_COL, AtmPlan, Visit, _bal_before, _idx, _q, apply_loads, simulate_balance, size_load
+from .plan import (
+    SL_COL,
+    AtmPlan,
+    Visit,
+    _bal_before,
+    _fmt_day,
+    _idx,
+    _q,
+    apply_loads,
+    need_window_end,
+    simulate_balance,
+    size_load,
+)
 
 if TYPE_CHECKING:
     from .forecast import ForecastResult
@@ -67,15 +82,17 @@ class _State:
         """Tier-1 (p50) need of visit k under the allocation so far: same formula as the plan (size_load)."""
         m, v = self.plan.master, self.plan.visits[k]
         i = _idx(v.date, self.fc.as_of)
-        nxt = next(
-            (
-                _idx(u.date, self.fc.as_of)
-                for u in self.plan.visits
-                if u.date > v.date and "skip" not in u.flags
-            ),
-            None,
-        )
-        end = nxt - 1 if nxt is not None else i + m.replenish_cycle_days - 1
+        # nxt = next(
+        #     (
+        #         _idx(u.date, self.fc.as_of)
+        #         for u in self.plan.visits
+        #         if u.date > v.date and "skip" not in u.flags
+        #     ),
+        #     None,
+        # )
+        # end = nxt - 1 if nxt is not None else i + m.replenish_cycle_days - 1
+        loading = [_idx(u.date, self.fc.as_of) for u in self.plan.visits if "skip" not in u.flags]
+        end = need_window_end(i, loading, m.replenish_cycle_days)
         return size_load(
             self.q, self.q50, i, end, self.bal_before(k), m.capacity, m.min_safe_balance, m.denomination
         )[1]
@@ -90,8 +107,8 @@ class _State:
         return max(room, 0)
 
 
-def _fmt_date(d: date) -> str:
-    return f"{d.day} {d.strftime('%b')} {d.year}"
+# def _fmt_date(d: date) -> str:
+#     return f"{d.day} {d.strftime('%b')} {d.year}"
 
 
 def _reproject(plan: AtmPlan, allocs: list[int], fc: ForecastResult, sl: str) -> AtmPlan:
@@ -114,6 +131,8 @@ def allocate(
     budget None or >= need: everything funded. Otherwise: manual visits first (fixed demand, date order),
     then a full Tier-1 pass (p50 need, date order, TR-32 tie-break, re-projected after each allocation),
     then Tier 2 proportional to max(0, amount - tier1_need), rounded down and capacity-capped."""
+    if budget is not None and budget < 0:
+        raise ValueError(f"budget must be >= 0, got {budget}")
     need_total = sum(int(v.amount) for p in plans for v in p.visits)
     if budget is None or budget >= need_total:
         out = [
@@ -178,7 +197,8 @@ def allocate(
             _, _, _, n, k, t1 = min(keyed)
             st = states[n]
             st.tier1[k] = t1
-            st.alloc[k] = take(t1, st.plan.master.denomination)
+            # st.alloc[k] = take(t1, st.plan.master.denomination)
+            st.alloc[k] = take(min(t1, int(st.plan.visits[k].amount)), st.plan.master.denomination)
             pending.remove((n, k))
 
     # Tier 2: the remainder in proportion to each visit's p50 -> p_service gap.
@@ -213,9 +233,14 @@ def allocate(
             if short:
                 i = _idx(v.date, st.fc.as_of)
                 below = np.flatnonzero(new.projection_p50[i:] < mn)
-                when = v.date + timedelta(days=int(below[0])) if len(below) else v.date
+                # when = v.date + timedelta(days=int(below[0])) if len(below) else v.date
                 v.flags.append(UNDERFUNDED)
-                v.reason = f"Underfunded – cash-out likely on {_fmt_date(when)}"
+                # v.reason = f"Underfunded – cash-out likely on {_fmt_date(when)}"
+                if len(below):
+                    when = v.date + timedelta(days=int(below[0]))
+                    v.reason = f"Underfunded – cash-out likely on {_fmt_day(when)}"
+                else:
+                    v.reason = "Underfunded – below safe minimum risk"
                 underfunded += 1
         out.append(new)
     funded = sum(int(v.allocated or 0) for p in out for v in p.visits)

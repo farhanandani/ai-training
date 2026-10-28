@@ -1,14 +1,16 @@
+import re
 from dataclasses import asdict
 from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from engine.allocate import allocate, reallocation_flows
 from engine.forecast import ForecastResult
 from engine.models import QCOLS
 from engine.plan import project_current, recommend, simulate_balance
-from engine.schema import AtmMaster
+from engine.schema import AtmMaster, Override
 
 M = 1_000_000
 AS_OF = date(2026, 3, 6)
@@ -222,3 +224,45 @@ def test_reallocation_flows():
     increase_a = sum(v.allocated for v in by["A"].visits) - sum(v.amount for v in cur["A"].visits)
     assert flows[0]["amount"] == min(reduction, increase_a)
     assert reallocation_flows(current, out) == flows
+
+
+def test_underfunded_reason_date_format():
+    plans, fcs, _ = _fixture()
+    out = allocate(plans, fcs, SL, 0)
+    reasons = [v.reason for p in out.plans for v in p.visits if "underfunded" in v.flags]
+    assert reasons
+    for r in reasons:
+        if r == "Underfunded – below safe minimum risk":
+            continue
+        assert re.fullmatch(r"Underfunded – cash-out likely on \d{1,2} [A-Z][a-z]{2}", r), r
+
+
+def test_negative_budget_raises():
+    plans, fcs, _ = _fixture()
+    with pytest.raises(ValueError):
+        allocate(plans, fcs, SL, -1)
+
+
+def test_manual_skip_never_overfunds_and_is_monotonic():
+    # Reviewer probe: B with a manual skip on day 8 -> plan amounts 410/0/520.
+    fc = _fc("B", 100 * M, 130 * M)
+    plan = recommend(
+        _master("B"),
+        fc,
+        600 * M,
+        AS_OF,
+        H,
+        SL,
+        [_d(4), _d(8), _d(12)],
+        [Override("B", _d(8), None, skipped=True)],
+    )
+    assert [v.amount for v in plan.visits] == [410 * M, 0, 520 * M]
+    prev = None
+    for budget in range(0, 930 * M + 1, 10 * M):
+        out = allocate([plan], {"B": fc}, SL, budget)
+        got = [v.allocated for v in out.plans[0].visits]
+        assert all(a <= v.amount for a, v in zip(got, plan.visits, strict=True)), (budget, got)
+        assert sum(got) <= budget
+        if prev is not None:
+            assert all(a >= b for a, b in zip(got, prev, strict=True)), (budget, got, prev)
+        prev = got
