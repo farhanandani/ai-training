@@ -1,0 +1,11 @@
+backend/.venv/
+workspace/
+frontend/node_modules/
+frontend/dist/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+test-results/
+playwright-report/
+.superpowers/
