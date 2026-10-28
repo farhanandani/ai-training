@@ -18,7 +18,7 @@ The owner talks in Indonesian. The UI and the docs are in English.
 Backend (Python 3.13, venv at `backend\.venv`; run pytest/ruff from `backend/`) and frontend (Vite + React) both exist now.
 
 ```
-scriptsun.ps1                    # demo: build SPA if stale, serve everything on 127.0.0.1:8000 (-NoBrowser to skip opening it)
+scripts\run.ps1                    # demo: build SPA if stale, serve everything on 127.0.0.1:8000 (-NoBrowser to skip opening it)
 scripts\dev.ps1                    # uvicorn --reload :8000 + vite :5173 (proxies /api)
 python data/generate_dummy.py      # regenerate all CSVs in data/ (seeded, byte-for-byte reproducible; stdlib only)
 
