@@ -11,7 +11,11 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
-from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
+
+# from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import Executor, Future, ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
+from concurrent.futures.thread import BrokenThreadPool
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Literal
@@ -56,6 +60,7 @@ def _worker_run_tid(tid: str, log_records: list[dict], holiday_records: list[dic
 
 PayloadFn = Callable[[str, date], tuple[list[dict], list[dict]]]
 ResultFn = Callable[[str, str, date, dict], None]
+_BROKEN = (BrokenProcessPool, BrokenThreadPool)
 
 
 @dataclass
@@ -77,6 +82,7 @@ class JobRunner:
         mode: Literal["process", "thread"] = "process",
         timeout: float = TIMEOUT_S,
         job_ttl: float = JOB_TTL_S,
+        executor_factory: Callable[[], Executor] | None = None,
     ):
         self.workers = max(1, int(workers))
         self.mode = mode
@@ -89,6 +95,9 @@ class JobRunner:
         self._inflight: dict[str, Future] = {}
         self._started: dict[str, float] = {}
         self._done: dict[str, str | None] = {}  # key -> None (ok) | error message
+        self._retry: set[str] = set()  # failed keys whose error is infrastructure (pool), not data
+        self._factory = executor_factory
+        self._gen = 0  # executor generation; bumped when a broken pool is dropped
         self._cond = threading.Condition(self._lock)
         self._stop = threading.Event()
         self._watchdog: threading.Thread | None = None
@@ -96,13 +105,33 @@ class JobRunner:
     # ------------------------------------------------------------- executor
     def _pool(self):
         if self._executor is None:
-            if self.mode == "thread":
+            # if self.mode == "thread":
+            #     self._executor = ThreadPoolExecutor(max_workers=self.workers, thread_name_prefix="fc")
+            # else:
+            #     self._executor = ProcessPoolExecutor(max_workers=self.workers, initializer=_init_worker)
+            if self._factory is not None:
+                self._executor = self._factory()
+            elif self.mode == "thread":
                 self._executor = ThreadPoolExecutor(max_workers=self.workers, thread_name_prefix="fc")
             else:
+                _init_worker()  # TR-40 caps in the parent too: spawned children inherit os.environ
                 self._executor = ProcessPoolExecutor(max_workers=self.workers, initializer=_init_worker)
-            self._watchdog = threading.Thread(target=self._watch, name="fc-watchdog", daemon=True)
+            # self._watchdog = threading.Thread(target=self._watch, name="fc-watchdog", daemon=True)
+            # self._watchdog.start()
+        if self._watchdog is None or not self._watchdog.is_alive() or self._stop.is_set():
+            self._stop = threading.Event()  # a runner reused after shutdown() gets a fresh watchdog
+            self._watchdog = threading.Thread(
+                target=self._watch, args=(self._stop,), name="fc-watchdog", daemon=True
+            )
             self._watchdog.start()
         return self._executor
+
+    def _reset_pool(self, gen: int) -> None:
+        """Drop a broken executor (lock held); the next _pool() call creates a fresh one. A broken
+        ProcessPoolExecutor has already shut itself down, so the reference is simply released."""
+        if gen == self._gen:
+            self._executor = None
+            self._gen += 1
 
     def shutdown(self) -> None:
         self._stop.set()
@@ -124,18 +153,29 @@ class JobRunner:
                 for jid in reversed(list(self._jobs)):
                     if set(keys) <= set(self._jobs[jid].keys):
                         return jid
-            self._jobs[job_id] = _Job(dict(keys))
+            # self._jobs[job_id] = _Job(dict(keys))
             for key, (tid, as_of) in keys.items():
                 if key in self._inflight:
                     continue
                 self._done.pop(key, None)
-                log_records, holiday_records = payload_fn(tid, as_of)
-                fut = self._pool().submit(
-                    _worker_run_tid, tid, log_records, holiday_records, as_of.isoformat()
-                )
-                self.submitted += 1
-                self._inflight[key] = fut
-                fut.add_done_callback(lambda f, k=key, t=tid, a=as_of: self._finish(k, t, a, f, on_result))
+                self._retry.discard(key)
+                # log_records, holiday_records = payload_fn(tid, as_of)
+                # fut = self._pool().submit(
+                #     _worker_run_tid, tid, log_records, holiday_records, as_of.isoformat()
+                # )
+                # self.submitted += 1
+                # self._inflight[key] = fut
+                # fut.add_done_callback(lambda f, k=key, t=tid, a=as_of: self._finish(k, t, a, f, on_result))
+                try:
+                    log_records, holiday_records = payload_fn(tid, as_of)
+                except Exception as e:  # noqa: BLE001  recorded so the job still reaches done
+                    self._done[key] = f"PAYLOAD_FAILED: {e}"
+                    self._retry.add(key)
+                    continue
+                args = (tid, log_records, holiday_records, as_of.isoformat())
+                self._launch(key, tid, as_of, args, on_result)
+            # registered after submission: every key is now in flight or resolved in _done
+            self._jobs[job_id] = _Job(dict(keys))
         return job_id
 
     def status(self, job_id: str) -> dict | None:
@@ -165,7 +205,10 @@ class JobRunner:
     def failure(self, key: str) -> str | None:
         """The error of a finished-and-failed key (failed keys are not resubmitted until the key changes)."""
         with self._lock:
-            return None if key in self._inflight else self._done.get(key)
+            # return None if key in self._inflight else self._done.get(key)
+            if key in self._inflight or key in self._retry:
+                return None  # running, or a pool failure: resubmit on the next call
+            return self._done.get(key)
 
     def wait(self, job_id: str, timeout: float | None = None) -> bool:
         end = None if timeout is None else time.monotonic() + timeout
@@ -180,7 +223,56 @@ class JobRunner:
                 self._cond.wait(0.2 if left is None else min(left, 0.2))
 
     # ------------------------------------------------------------- internal
-    def _finish(self, key: str, tid: str, as_of: date, fut: Future, on_result: ResultFn | None) -> None:
+    def _launch(self, key: str, tid: str, as_of: date, args: tuple, on_result, attempt: int = 0) -> None:
+        """Submit one key (lock held). A broken or shut-down pool is replaced and the submit retried once;
+        a second failure is recorded (retryable), so the job still reaches done."""
+        err: Exception | None = None
+        for _ in range(2):
+            gen = self._gen
+            try:
+                fut = self._pool().submit(_worker_run_tid, *args)
+            except (*_BROKEN, RuntimeError) as e:
+                err = e
+                self._reset_pool(gen)
+                continue
+            self.submitted += 1
+            self._inflight[key] = fut
+            fut.add_done_callback(
+                lambda f, g=gen: self._finish(key, tid, as_of, f, on_result, args, attempt, g)
+            )
+            return
+        self._inflight.pop(key, None)
+        self._started.pop(key, None)
+        self._done[key] = f"POOL_FAILED: {err}"
+        self._retry.add(key)
+        self._cond.notify_all()
+
+    # def _finish(self, key: str, tid: str, as_of: date, fut: Future, on_result: ResultFn | None) -> None:
+    def _finish(
+        self,
+        key: str,
+        tid: str,
+        as_of: date,
+        fut: Future,
+        on_result: ResultFn | None,
+        args: tuple = (),
+        attempt: int = 0,
+        gen: int = 0,
+    ) -> None:
+        if not fut.cancelled() and isinstance(fut.exception(), _BROKEN):
+            with self._cond:  # a worker died: the whole pool is broken (TR-41)
+                if self._inflight.get(key) is not fut:
+                    return
+                self._reset_pool(gen)
+                if attempt == 0:
+                    self._launch(key, tid, as_of, args, on_result, attempt=1)  # retry once on a fresh pool
+                    return
+                del self._inflight[key]
+                self._started.pop(key, None)
+                self._done[key] = f"POOL_FAILED: {fut.exception()}"
+                self._retry.add(key)
+                self._cond.notify_all()
+                return
         if fut.cancelled():
             res = {"error": "cancelled", "code": "CANCELLED"}
         elif fut.exception() is not None:
@@ -203,9 +295,11 @@ class JobRunner:
             self._done[key] = err
             self._cond.notify_all()
 
-    def _watch(self) -> None:
+    # def _watch(self) -> None:
+    def _watch(self, stop: threading.Event) -> None:
         """Per-TID timeout (TR-41): a key running longer than `timeout` is recorded as failed."""
-        while not self._stop.wait(min(0.1, self.timeout / 3)):
+        # while not self._stop.wait(min(0.1, self.timeout / 3)):
+        while not stop.wait(min(0.1, self.timeout / 3)):
             now = time.monotonic()
             with self._cond:
                 for key, fut in list(self._inflight.items()):

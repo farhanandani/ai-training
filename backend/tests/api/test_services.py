@@ -2,6 +2,8 @@
 
 import threading
 import time
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from datetime import date, timedelta
 
 import numpy as np
@@ -452,3 +454,151 @@ def test_scenarios_and_warmup_default_first(svc):
         assert job is None or svc.runner.wait(job, timeout=60)
     for as_of in (date(2026, 3, 6), date(2026, 10, 27), date(2025, 12, 15)):
         assert svc.ensure_forecasts(as_of)[1] == []
+
+
+# ------------------------------------------------------- fix round 1: pool recovery
+
+
+def _ok_worker(tid, log_records, holiday_records, as_of_iso):
+    return {"ok": None, "insufficient": True}
+
+
+class _FlakyPool(ThreadPoolExecutor):
+    """mode: "raise" -> submit raises BrokenProcessPool; "dead" -> returns futures already broken."""
+
+    def __init__(self, mode):
+        super().__init__(max_workers=2)
+        self.mode = mode
+
+    def submit(self, fn, *args, **kwargs):
+        if self.mode == "raise":
+            raise BrokenProcessPool("pool is broken")
+        if self.mode == "dead":
+            f = Future()
+            f.set_exception(BrokenProcessPool("a worker process died"))
+            return f
+        return super().submit(fn, *args, **kwargs)
+
+
+def _factory(modes):
+    made = []
+
+    def make():
+        ex = _FlakyPool(modes.pop(0) if modes else "ok")
+        made.append(ex)
+        return ex
+
+    return make, made
+
+
+KEYS3 = {f"k{i}": (f"TID-{i}", AS_OF) for i in range(3)}
+
+
+@pytest.mark.parametrize("mode", ["raise", "dead"])
+def test_broken_pool_replaced_and_retried(monkeypatch, mode):
+    monkeypatch.setattr(jobs, "_worker_run_tid", _ok_worker)
+    make, made = _factory([mode])
+    r = JobRunner(workers=2, executor_factory=make)
+    try:
+        job = r.submit(KEYS3, lambda t, a: ([], []))
+        assert r.wait(job, timeout=10)
+        st = r.status(job)
+        assert st["done"] and st["finished"] == 3 and st["failed"] == []
+        assert len(made) == 2  # the broken pool was dropped and a fresh one created
+        later = r.submit({"k9": ("TID-9", AS_OF)}, lambda t, a: ([], []))
+        assert r.wait(later, timeout=10) and r.status(later)["failed"] == []
+    finally:
+        r.shutdown()
+        for ex in made:
+            ex.shutdown(wait=False)
+
+
+def test_persistent_broken_pool_reaches_done_then_recovers(monkeypatch):
+    monkeypatch.setattr(jobs, "_worker_run_tid", _ok_worker)
+    make, made = _factory(["dead"] * 6)
+    r = JobRunner(workers=2, executor_factory=make)
+    try:
+        job = r.submit(KEYS3, lambda t, a: ([], []))
+        assert r.wait(job, timeout=10)
+        st = r.status(job)
+        assert st["done"] and sorted(f["tid"] for f in st["failed"]) == ["TID-0", "TID-1", "TID-2"]
+        assert all(f["error"].startswith("POOL_FAILED") for f in st["failed"])
+        assert all(r.failure(k) is None for k in KEYS3)  # retryable: not a permanent failure
+        again = r.submit(KEYS3, lambda t, a: ([], []))  # pools now healthy
+        assert r.wait(again, timeout=10) and r.status(again)["failed"] == []
+    finally:
+        r.shutdown()
+        for ex in made:
+            ex.shutdown(wait=False)
+
+
+def test_payload_failure_recorded_and_job_done(monkeypatch, runner):
+    monkeypatch.setattr(jobs, "_worker_run_tid", _ok_worker)
+
+    def payload(tid, as_of):
+        if tid == "TID-1":
+            raise OSError("disk gone")
+        return [], []
+
+    job = runner.submit(KEYS3, payload)
+    assert runner.wait(job, timeout=10)
+    st = runner.status(job)
+    assert st["done"] and [f["tid"] for f in st["failed"]] == ["TID-1"]
+    assert "PAYLOAD_FAILED" in st["failed"][0]["error"]
+
+
+def test_runner_reusable_after_shutdown(monkeypatch):
+    monkeypatch.setattr(jobs, "_worker_run_tid", _ok_worker)
+    r = JobRunner(workers=1, mode="thread")
+    try:
+        assert r.wait(r.submit({"a": ("TID-A", AS_OF)}, lambda t, a: ([], [])), timeout=10)
+        r.shutdown()
+        job = r.submit({"b": ("TID-B", AS_OF)}, lambda t, a: ([], []))
+        assert r.wait(job, timeout=10) and r.status(job)["failed"] == []
+        assert r._watchdog is not None and r._watchdog.is_alive()
+    finally:
+        r.shutdown()
+
+
+def test_cache_key_matches_store_tid_hash(svc, store):
+    _warm(svc)
+    key = cache_key("TID-JKT-0001", AS_OF, store.tid_hash("TID-JKT-0001", AS_OF), store.holiday_hash())
+    assert store.cache_get(key) is not None
+
+
+def test_insufficient_history_tid_in_fleet_and_plan(svc, store):
+    from engine.schema import LOG_COLS, AtmMaster
+
+    store.put_master(
+        [
+            AtmMaster(
+                "TID-NEW-1", "New Mall", "mall", 800_000_000, 50_000_000, 7, 100_000, 1_500_000, 700_000_000
+            )
+        ]
+    )
+    days = [AS_OF - timedelta(days=i) for i in range(99, -1, -1)]
+    log = pd.DataFrame(
+        {
+            "tid": "TID-NEW-1",
+            "date": days,
+            "opening_balance": 500_000_000,
+            "withdrawal": 10_000_000,
+            "replenishment": 0,
+            "closing_balance": 490_000_000,
+        }
+    )[LOG_COLS]
+    store.upsert_log(log, "upload")
+    _warm(svc)
+    rows = {a["tid"]: a for a in svc.fleet(AS_OF, 21, "p90")["atms"]}
+    assert len(rows) == 11
+    new = rows["TID-NEW-1"]
+    assert new["status"] == "insufficient_history"
+    assert new["recommended_amount"] is None and new["days_of_cash"] is None and new["next_visit"] is None
+    assert all(
+        r["status"] in {"ok", "cash_out_risk", "over_stocked"} for t, r in rows.items() if t != "TID-NEW-1"
+    )
+    p = svc.plan(AS_OF, 21, "p90", None)
+    assert not [v for v in p["visits"] if v["tid"] == "TID-NEW-1"]
+    assert p["need_total"] > 0 and p["funded_pct"] == 1.0
+    q = svc.plan(AS_OF, 21, "p90", p["need_total"] // 2)
+    assert q["funded_total"] <= p["need_total"] // 2

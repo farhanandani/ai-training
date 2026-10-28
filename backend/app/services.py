@@ -11,7 +11,9 @@ from datetime import date, timedelta
 from app.errors import ApiError
 from app.jobs import JobRunner, cache_key
 from app.settings import Settings
-from app.store import Store
+
+# from app.store import Store
+from app.store import Store, frame_hash
 from engine.allocate import allocate, reallocation_flows
 from engine.backtest import metrics
 from engine.compare import build_demand_source, compare
@@ -81,20 +83,26 @@ class Services:
         self._range: tuple[int, tuple[date, date]] | None = None
 
     # ---------------------------------------------------------------- heavy layer
-    def _payload(self, tid: str, as_of: date) -> tuple[list[dict], list[dict]]:
-        log = self.store.get_log([tid], end=as_of)[LOG_COLS]
-        log = log.assign(date=[d.isoformat() for d in log["date"]])
-        hol = self.store.get_holidays()
-        hol = hol.assign(date=[d.isoformat() for d in hol["date"]])
-        return log.to_dict("records"), hol.to_dict("records")
+    # def _payload(self, tid: str, as_of: date) -> tuple[list[dict], list[dict]]:
+    #     log = self.store.get_log([tid], end=as_of)[LOG_COLS]
+    #     log = log.assign(date=[d.isoformat() for d in log["date"]])
+    #     hol = self.store.get_holidays()
+    #     hol = hol.assign(date=[d.isoformat() for d in hol["date"]])
+    #     return log.to_dict("records"), hol.to_dict("records")
+    @staticmethod
+    def _records(df) -> list[dict]:
+        return df.assign(date=[d.isoformat() for d in df["date"]]).to_dict("records")
 
     def _on_result(self, key: str, tid: str, as_of: date, res: dict) -> None:
         payload = {"insufficient": True} if res.get("insufficient") else res["ok"]
         self.store.cache_put(key, tid, as_of, payload)
 
     def _load(self, key: str):
-        if key in self._memo:
-            return self._memo[key]
+        # if key in self._memo:
+        #     return self._memo[key]
+        fc = self._memo.get(key, _MISS)  # single lookup: the memo may be cleared by another thread
+        if fc is not _MISS:
+            return fc
         payload = self.store.cache_get(key)
         if payload is None:
             return _MISS
@@ -108,9 +116,14 @@ class Services:
         ready: dict[str, ForecastResult | None] = {}
         failed: dict[str, str] = {}
         misses: dict[str, tuple[str, date]] = {}
-        hh = self.store.holiday_hash()
+        # hh = self.store.holiday_hash()
+        hol = self.store.get_holidays()
+        hh = frame_hash(hol)  # the key hashes exactly the frames that are sent to the worker
+        logs: dict[str, object] = {}
         for m in self.store.get_master():
-            key = cache_key(m.tid, as_of, self.store.tid_hash(m.tid, as_of), hh)
+            # key = cache_key(m.tid, as_of, self.store.tid_hash(m.tid, as_of), hh)
+            log = self.store.get_log([m.tid], end=as_of)[LOG_COLS]
+            key = cache_key(m.tid, as_of, frame_hash(log), hh)
             fc = self._load(key)
             if fc is not _MISS:
                 ready[m.tid] = fc
@@ -118,7 +131,14 @@ class Services:
                 failed[m.tid] = err
             else:
                 misses[key] = (m.tid, as_of)
-        job_id = self.runner.submit(misses, self._payload, self._on_result) if misses else None
+                logs[m.tid] = log
+        # job_id = self.runner.submit(misses, self._payload, self._on_result) if misses else None
+        job_id = None
+        if misses:
+            hol_records = self._records(hol)
+            job_id = self.runner.submit(
+                misses, lambda tid, _a: (self._records(logs[tid]), hol_records), self._on_result
+            )
         return ready, sorted(t for t, _ in misses.values()), job_id, failed
 
     def ensure_forecasts(self, as_of: date) -> tuple[dict[str, ForecastResult | None], list[str], str | None]:

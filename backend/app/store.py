@@ -414,11 +414,19 @@ class Store:
     def tid_hash(self, tid: str, as_of) -> str:
         """sha256 over the canonical CSV of this TID's rows with date <= as_of (source excluded)."""
         df = self.get_log([tid], end=as_of)[LOG_COLS]
-        return hashlib.sha256(df.to_csv(index=False, lineterminator="\n").encode()).hexdigest()
+        # return hashlib.sha256(df.to_csv(index=False, lineterminator="\n").encode()).hexdigest()
+        return frame_hash(df)
 
     def holiday_hash(self) -> str:
         df = self.get_holidays()
-        return hashlib.sha256(df.to_csv(index=False, lineterminator="\n").encode()).hexdigest()
+        # return hashlib.sha256(df.to_csv(index=False, lineterminator="\n").encode()).hexdigest()
+        return frame_hash(df)
+
+
+def frame_hash(df: pd.DataFrame) -> str:
+    """sha256 over a frame's canonical CSV. tid_hash = frame_hash(log rows <= as_of, LOG_COLS);
+    holiday_hash = frame_hash(get_holidays()). Callers that already hold those frames hash them directly."""
+    return hashlib.sha256(df.to_csv(index=False, lineterminator="\n").encode()).hexdigest()
 
 
 def _log_frame(rows: list[tuple]) -> pd.DataFrame:
