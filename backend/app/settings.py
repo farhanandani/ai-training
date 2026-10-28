@@ -50,4 +50,5 @@ class Settings:
     workers: int = field(default_factory=_default_workers)
     max_upload_mb: int = field(default_factory=lambda: int(_env("MAX_UPLOAD_MB", "20")))
     warmup_scenarios: bool = field(default_factory=lambda: _bool("WARMUP_SCENARIOS", True))
+    frontend_dist: Path = field(default_factory=lambda: _path("FRONTEND_DIST", "frontend/dist"))
     business_defaults: dict = field(default_factory=_business_defaults)

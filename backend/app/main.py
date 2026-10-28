@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+import os
 import threading
 from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 
 from app.errors import ApiError
 from app.jobs import JobRunner
@@ -41,6 +44,29 @@ def install_error_handlers(app: FastAPI) -> None:
         return _error(400, "BAD_PARAMS", message, {"errors": fields})
 
 
+log = logging.getLogger("cashfc")
+DEV_ORIGIN = "http://localhost:5173"
+
+
+def mount_spa(app: FastAPI, dist) -> None:
+    """Serve the built SPA from `dist` with an index.html fallback for non-/api paths (TR-42 offline demo)."""
+    index = dist / "index.html"
+    if not index.is_file():
+        log.warning("frontend build not found at %s; serving the API only", dist)
+        return
+    root = dist.resolve()
+
+    # registered after the API routers, so /api, /docs and /openapi.json always win
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa(full_path: str):
+        if full_path == "api" or full_path.startswith("api/"):
+            raise ApiError(404, "NOT_FOUND", f"unknown API path /{full_path}")
+        target = (root / full_path).resolve()
+        if full_path and target.is_file() and root in target.parents:
+            return FileResponse(target)
+        return FileResponse(index)
+
+
 def create_app(
     settings: Settings | None = None,
     start_warmup: bool = True,
@@ -68,4 +94,13 @@ def create_app(
     # for mod in (system, fleet, atm, accuracy, planner):
     for mod in (system, fleet, atm, accuracy, planner, data):
         app.include_router(mod.router, prefix="/api")
+    if os.environ.get("CASHFC_DEV", "").strip().lower() in ("1", "true", "yes", "on"):
+        app.add_middleware(
+            CORSMiddleware, allow_origins=[DEV_ORIGIN], allow_methods=["*"], allow_headers=["*"]
+        )
+    mount_spa(app, settings.frontend_dist)
     return app
+
+
+# uvicorn app.main:app (scripts/run.ps1); tests and tools use create_app() directly
+app = create_app()
