@@ -11,7 +11,8 @@ export function formatRp(n: number): string {
 export function formatRpCompact(n: number): string {
   const sign = n < 0 ? "-" : "";
   const a = Math.abs(n);
-  if (a >= 1e9) return `${sign}Rp ${(a / 1e9).toFixed(1).replace(".", ",")} M`;
+  // if (a >= 1e9) return
+  if (a >= 1e9 || Math.round(a / 1e6) >= 1000) return `${sign}Rp ${(a / 1e9).toFixed(1).replace(".", ",")} M`;
   if (a >= 1e6) return `${sign}Rp ${ID.format(Math.round(a / 1e6))} jt`;
   return formatRp(n);
 }

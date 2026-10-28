@@ -48,6 +48,9 @@ def test_unknown_api_path_is_not_index(tmp_path, seed_dir, dist, monkeypatch):
     with _client(tmp_path, seed_dir, dist) as c:
         r = c.get("/api/nope")
         assert r.status_code == 404 and "SPA-INDEX" not in r.text
+        assert r.json()["error"]["code"] == "NOT_FOUND"
+        r = c.post("/api/nope", json={})
+        assert r.status_code == 404 and r.json()["error"]["code"] == "NOT_FOUND"
 
 
 def test_no_dist_api_still_starts(tmp_path, seed_dir, monkeypatch):

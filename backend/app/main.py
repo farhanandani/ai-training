@@ -1,4 +1,5 @@
-"""FastAPI app factory (ARCHITECTURE 8). The SPA is mounted in a later task."""
+# """FastAPI app factory (ARCHITECTURE 8). The SPA is mounted in a later task."""
+"""FastAPI app factory (ARCHITECTURE 8); also serves the built SPA and a JSON 404 for unknown /api paths."""
 
 from __future__ import annotations
 
@@ -11,6 +12,8 @@ from typing import Literal
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+
+# from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse, JSONResponse
 
 from app.errors import ApiError
@@ -59,8 +62,6 @@ def mount_spa(app: FastAPI, dist) -> None:
     # registered after the API routers, so /api, /docs and /openapi.json always win
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa(full_path: str):
-        if full_path == "api" or full_path.startswith("api/"):
-            raise ApiError(404, "NOT_FOUND", f"unknown API path /{full_path}")
         target = (root / full_path).resolve()
         if full_path and target.is_file() and root in target.parents:
             return FileResponse(target)
@@ -98,6 +99,14 @@ def create_app(
         app.add_middleware(
             CORSMiddleware, allow_origins=[DEV_ORIGIN], allow_methods=["*"], allow_headers=["*"]
         )
+
+    # unknown /api paths: JSON 404 for every method (never the SPA index); after the routers so real routes win
+    @app.api_route(
+        "/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False
+    )
+    def api_not_found(rest: str):
+        raise ApiError(404, "NOT_FOUND", f"unknown API path /api/{rest}")
+
     mount_spa(app, settings.frontend_dist)
     return app
 
