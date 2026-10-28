@@ -271,3 +271,24 @@ def test_patch_row_recompute_real_worker(tmp_path, seed_dir):
         for t in TIDS:
             if t != TID:
                 assert after[t]["recommended_amount"] == before[t]["recommended_amount"]
+
+
+def test_reset_rewarms_all_scenarios_in_background(client, monkeypatch):
+    import threading
+
+    svc = client.app.state.services
+    called = threading.Event()
+    monkeypatch.setattr(svc, "warmup", lambda wait=False: called.set() or [])
+    assert svc.warm_on_reset is False  # create_app(start_warmup=False): tests never warm in the background
+    client.post("/api/data/reset")
+    assert not called.wait(0.3)
+    svc.warm_on_reset = True
+    assert client.post("/api/data/reset").status_code == 200
+    assert called.wait(5)
+
+
+def test_create_app_warms_on_reset_when_warmup_enabled(tmp_path, seed_dir):
+    s = Settings(workspace_db=tmp_path / "ws" / "workspace.db", seed_dir=seed_dir, workers=1)
+    app = create_app(s, start_warmup=True, runner_mode="thread")
+    with TestClient(app) as c:
+        assert c.app.state.services.warm_on_reset is True

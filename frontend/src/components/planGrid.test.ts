@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlanResponse } from "../api/client";
+import { excludedNotice } from "./planRows";
 import {
   budgetFromNeed,
   digitsOnly,
@@ -89,4 +90,19 @@ describe("budget helpers", () => {
   it("digitsOnly strips everything but digits", () => expect(digitsOnly("7.000,5abc")).toBe("70005"));
   it("formats with id-ID grouping", () => expect(formatBudgetInput("7000000000")).toBe("7.000.000.000"));
   it("70% of need rounds down to 100.000", () => expect(budgetFromNeed(10_123_456_789)).toBe(7_086_400_000));
+});
+
+describe("excludedNotice", () => {
+  it("lists the TIDs left out of the plan (forecast failed / insufficient history)", () => {
+    const atms = [
+      { tid: "1001", status: "ok" },
+      { tid: "1003", status: "forecast_failed" },
+      { tid: "1002", status: "insufficient_history" },
+    ];
+    expect(excludedNotice(atms)).toBe(
+      "Not in the plan: 1003 (forecast failed), 1002 (insufficient history).",
+    );
+    expect(excludedNotice([{ tid: "1001", status: "ok" }])).toBeNull();
+    expect(excludedNotice(undefined)).toBeNull();
+  });
 });

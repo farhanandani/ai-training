@@ -12,6 +12,7 @@ import {
   budgetFromNeed,
   comparisonOf,
   digitsOnly,
+  excludedNotice,
   flowsOf,
   formatBudgetInput,
   overridesFromEdits,
@@ -180,6 +181,7 @@ export function PlannerPage() {
   const hasOverrides = baseRows.some((r) => r.override) || Object.keys(edits).length > 0;
   const flows = flowsOf(plan);
   const pendingTids = plan.pending_tids.length;
+  const excluded = excludedNotice(fleet.data?.atms);
 
   return (
     <div className="space-y-5">
@@ -267,6 +269,12 @@ export function PlannerPage() {
           </p>
         )}
       </section>
+
+      {excluded && (
+        <p role="note" className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          {excluded}
+        </p>
+      )}
 
       {pendingTids > 0 && (
         <Spinner label={`Forecasting ${pendingTids} more ATM${pendingTids === 1 ? "" : "s"}...`} />

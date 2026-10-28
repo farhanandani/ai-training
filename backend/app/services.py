@@ -82,6 +82,7 @@ class Services:
         self.settings = settings
         self._memo: dict[str, ForecastResult | None] = {}
         self._range: tuple[int, tuple[date, date]] | None = None
+        self.warm_on_reset = False  # create_app: re-warm every scenario after a data reset (background)
 
     # ---------------------------------------------------------------- heavy layer
     # def _payload(self, tid: str, as_of: date) -> tuple[list[dict], list[dict]]:

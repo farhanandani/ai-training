@@ -1,4 +1,6 @@
-# Demo launcher: venv + backend install (first run), frontend build (if stale), serve on 127.0.0.1:8000.
+# # Demo launcher: venv + backend install (first run), frontend build (if stale), serve on 127.0.0.1:8000.
+# Demo launcher: venv + backend install (first run), frontend build (if stale), serve on 127.0.0.1:$env:CASHFC_PORT
+# (default 8000).
 # Works from any CWD. First-time setup needs internet (pip/npm); afterwards the demo is fully offline.
 param([switch]$NoBrowser)
 
@@ -7,7 +9,9 @@ $Root = Split-Path -Parent $PSScriptRoot
 $Backend = Join-Path $Root "backend"
 $Frontend = Join-Path $Root "frontend"
 $VenvPy = Join-Path $Backend ".venv\Scripts\python.exe"
-$Url = "http://127.0.0.1:8000"
+# $Url = "http://127.0.0.1:8000"
+$Port = if ($env:CASHFC_PORT) { $env:CASHFC_PORT } else { "8000" }
+$Url = "http://127.0.0.1:$Port"
 
 function Invoke-Checked([string]$what, [scriptblock]$cmd) {
     & $cmd
@@ -54,5 +58,6 @@ if (-not $NoBrowser) {
 Write-Host "Serving $Url  (Ctrl+C to stop)"
 Push-Location $Backend
 try {
-    & $VenvPy -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+    # & $VenvPy -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+    & $VenvPy -m uvicorn app.main:app --host 127.0.0.1 --port $Port
 } finally { Pop-Location }

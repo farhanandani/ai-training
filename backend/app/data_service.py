@@ -7,6 +7,7 @@ current as_of -> TR-37 body."""
 from __future__ import annotations
 
 import io
+import threading
 from datetime import date
 
 import pandas as pd
@@ -135,7 +136,8 @@ def upload(svc: Services, data: bytes, filename: str, kind: str, mode: str) -> d
 
 def _upload_log(svc: Services, df: pd.DataFrame, filename: str, replace: bool) -> None:
     store = svc.store
-    if replace and df.empty:
+    # if replace and df.empty:
+    if df.empty:  # merge too: no valid row changes neither the label nor the true demand
         return  # every row was rejected: keep the current data, the issues say why
     masters = store.get_master()
     with store.transaction():
@@ -228,7 +230,11 @@ def put_holidays(svc: Services, df: pd.DataFrame) -> dict:
 
 def reset(svc: Services) -> dict:
     svc.store.seed_from_dummy()  # also clears overrides, forecast cache and stored issues
-    return finish_write(svc)
+    # return finish_write(svc)
+    out = finish_write(svc)
+    if svc.warm_on_reset:  # the cache was cleared: pre-compute every demo scenario again (like startup)
+        threading.Thread(target=svc.warmup, daemon=True, name="warmup-reset").start()
+    return out
 
 
 # ------------------------------------------------------------------- download

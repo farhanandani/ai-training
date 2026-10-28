@@ -111,3 +111,13 @@ export const formatBudgetInput = (digits: string) =>
   digits === "" ? "" : new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(Number(digits));
 /** floor(70% of need), rounded down to Rp 100.000 */
 export const budgetFromNeed = (need: number) => Math.floor((need * 0.7) / 100_000) * 100_000;
+
+const EXCLUDED: Record<string, string> = {
+  forecast_failed: "forecast failed",
+  insufficient_history: "insufficient history",
+};
+/** One-line Planner notice: ATMs that have no forecast and therefore no visits in the plan (null when none). */
+export function excludedNotice(atms: { tid: string; status: string }[] | undefined): string | null {
+  const out = (atms ?? []).filter((a) => a.status in EXCLUDED).map((a) => `${a.tid} (${EXCLUDED[a.status]})`);
+  return out.length ? `Not in the plan: ${out.join(", ")}.` : null;
+}

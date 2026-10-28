@@ -49,11 +49,13 @@ export function UploadDialog({ onClose, onDone }: { onClose: () => void; onDone:
         <h2 className="text-base font-semibold text-slate-900">Upload data</h2>
         <div className="mt-3 grid gap-3 text-sm">
           <label className="grid gap-1">
-            <span className="text-slate-600">File (CSV or Excel)</span>
+            {/* <span className="text-slate-600">File (CSV or Excel)</span> */}
+            <span className="text-slate-600">File (CSV or Excel .xlsx)</span>
             <input
               type="file"
               aria-label="File"
-              accept=".csv,.xlsx,.xls"
+              // accept=".csv,.xlsx,.xls"
+              accept=".csv,.xlsx"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
           </label>

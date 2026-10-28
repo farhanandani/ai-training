@@ -314,3 +314,14 @@ def test_bank_style_csv_uploads_without_row_loss(client):
         x["opening_balance"] + x["replenishment"] - x["withdrawal"] == x["closing_balance"]
         for x in rows["rows"]
     )
+
+
+def test_merge_log_with_no_valid_rows_keeps_label_and_true_demand(client):
+    store = client.app.state.store
+    v0 = client.get("/api/context").json()["dataset_version"]
+    body = "tid,date,opening_balance,closing_balance\nX-1,not-a-date,10,5\n"
+    r = _upload(client, "bad.csv", body.encode(), mode="merge")
+    assert r.status_code == 200 and _codes(r.json()["issues"], "BAD_DATE")
+    ctx = client.get("/api/context").json()
+    assert ctx["data_source"] == "Dummy data" and ctx["dataset_version"] == v0
+    assert store.get_true_demand() is not None

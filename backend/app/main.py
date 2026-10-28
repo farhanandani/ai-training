@@ -83,6 +83,7 @@ def create_app(
         runner = JobRunner(settings.workers, mode=runner_mode)
         svc = Services(store, runner, settings)
         app.state.store, app.state.runner, app.state.services = store, runner, svc
+        svc.warm_on_reset = start_warmup and settings.warmup_scenarios
         if start_warmup and settings.warmup_scenarios:
             threading.Thread(target=svc.warmup, daemon=True, name="warmup").start()
         try:
