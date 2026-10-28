@@ -206,3 +206,53 @@ def test_seed_files_load_clean(seed_dir, name, kind, rows):
     assert not [i for i in issues if i.severity == "error"]
     if rows:
         assert len(df) == rows
+
+
+def test_blank_replenishment_cell_is_derived_for_that_row():
+    # F6: a blank optional cell is missing for that row only (PRD 4.1), never a rejected row.
+    rows = [
+        "A,2026-03-01,1000,100,,900",
+        "A,2026-03-02,900,100,500,1300",
+        "A,2026-03-03,1300,100,,1700",
+    ]
+    df, issues = log(rows)
+    assert len(df) == 3 and "BAD_AMOUNT" not in codes(issues)
+    by = df.set_index("date")
+    assert by.loc[date(2026, 3, 1), "replenishment"] == 0
+    assert by.loc[date(2026, 3, 3), "replenishment"] == 500  # 1700 - 1300 + 100
+    assert list(df["source"]) == ["derived", "upload", "derived"]
+    assert "DERIVED_VALUE" in codes(issues)
+    assert all(i.severity == "info" for i in issues if i.code == "DERIVED_VALUE")
+
+
+def test_blank_withdrawal_cell_is_derived_and_negative_warns():
+    rows = [
+        "A,2026-03-01,1000,,0,900",
+        "A,2026-03-02,900,,0,950",  # balance rose with no replenishment: derived withdrawal -50
+    ]
+    df, issues = log(rows)
+    assert len(df) == 2
+    assert list(df["withdrawal"]) == [100, -50]
+    assert set(df["source"]) == {"derived"}
+    neg = [i for i in issues if i.code == "NEGATIVE_DERIVED"]
+    assert len(neg) == 1 and neg[0].severity == "warning" and neg[0].date == date(2026, 3, 2)
+
+
+def test_both_blank_cells_use_jump_detection():
+    rows = [
+        "A,2026-03-01,1000,100,0,900",
+        "A,2026-03-02,900,,,800",
+        "A,2026-03-03,800,,,1900",  # +1100 jump: a replenishment day
+    ]
+    df, _ = log(rows, capacities={"A": 2000})
+    by = df.set_index("date")
+    assert (by.loc[date(2026, 3, 2), "withdrawal"], by.loc[date(2026, 3, 2), "replenishment"]) == (100, 0)
+    assert by.loc[date(2026, 3, 3), "replenishment"] > 0
+    w3, r3 = by.loc[date(2026, 3, 3), "withdrawal"], by.loc[date(2026, 3, 3), "replenishment"]
+    assert 800 + r3 - w3 == 1900
+    assert by.loc[date(2026, 3, 1), "source"] == "upload"
+
+
+def test_blank_balance_is_still_a_row_error():
+    df, issues = log(["A,2026-03-01,,100,0,900", *ROWS[1:]])
+    assert len(df) == 2 and "BAD_AMOUNT" in codes(issues)

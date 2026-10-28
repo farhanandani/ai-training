@@ -60,6 +60,7 @@ MASTER_REQUIRED = ["tid", *MASTER_INT]
 HOLIDAY_COLS = ["date", "name", "type"]
 LOG_REQUIRED = ["tid", "date", "opening_balance", "closing_balance"]
 LOG_AMOUNTS = ["opening_balance", "withdrawal", "replenishment", "closing_balance"]
+OPTIONAL_AMOUNTS = ("withdrawal", "replenishment")  # PRD 4.1: derivable from the balances when missing
 
 _AMOUNT_RE = re.compile(r"^\s*(Rp)?\s*-?\d+(\.\d+)?\s*$", re.IGNORECASE)
 # id-ID thousand grouping (one or more groups of 3), e.g. 1.000 or 250.000.000: ambiguous, never guessed.
@@ -134,11 +135,20 @@ def _parse_amount(v: Any) -> int | None:
     return int(Decimal(num).quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
-def _parse_amount_cols(r, cols, cell, issues: list[Issue], tid: str, d: date | None = None):
-    """Parse the named amount columns of one row; return {col: int} or None after recording the issue."""
-    rec: dict[str, int] = {}
+# def _parse_amount_cols(r, cols, cell, issues: list[Issue], tid: str, d: date | None = None):
+def _parse_amount_cols(
+    r, cols, cell, issues: list[Issue], tid: str, d: date | None = None, optional: tuple[str, ...] = ()
+):
+    # """Parse the named amount columns of one row; return {col: int} or None after recording the issue."""
+    """Parse the named amount columns of one row; return {col: int} or None after recording the issue.
+    A blank cell of an `optional` column is None (missing for that row: derived later, F6)."""
+    # rec: dict[str, int] = {}
+    rec: dict[str, int | None] = {}
     for c in cols:
         raw = cell(r, c)
+        if c in optional and _is_blank(raw):
+            rec[c] = None
+            continue
         v = None if _is_blank(raw) else _parse_amount(raw)
         if v is None:
             issues.append(Issue("error", "BAD_AMOUNT", f"Unparseable amount {raw!r} in {c}", tid, d))
@@ -232,7 +242,8 @@ def _read_log(body, idx, cell, issues: list[Issue]) -> pd.DataFrame:
         #     rec[c] = v
         # if ok:
         #     out.append(rec)
-        amounts = _parse_amount_cols(r, amount_cols, cell, issues, tid, d)
+        # amounts = _parse_amount_cols(r, amount_cols, cell, issues, tid, d)
+        amounts = _parse_amount_cols(r, amount_cols, cell, issues, tid, d, OPTIONAL_AMOUNTS)
         if amounts is not None:
             out.append({"tid": tid, "date": d, **amounts})
     return pd.DataFrame(out, columns=["tid", "date", *amount_cols])
@@ -249,8 +260,14 @@ def _aggregate(df: pd.DataFrame, issues: list[Issue]) -> pd.DataFrame:
     spec: dict[str, str] = {"opening_balance": "first", "closing_balance": "last"}
     for c in ("withdrawal", "replenishment"):
         if c in df.columns:
-            spec[c] = "sum"
+            # spec[c] = "sum"
+            spec[c] = _sum_or_missing
     return df.groupby(["tid", "date"], sort=True, as_index=False).agg(spec)
+
+
+def _sum_or_missing(s: pd.Series) -> float:
+    """Aggregated amount; missing (NaN) when every duplicate row left the cell blank (F6)."""
+    return s.sum(min_count=1)
 
 
 def _finish_log(df, issues, frac, capacities):
@@ -268,10 +285,56 @@ def _finish_log(df, issues, frac, capacities):
         df["withdrawal"] = df["opening_balance"] + df["replenishment"] - df["closing_balance"]
     df = df.copy()
     df["source"] = "derived" if derive else "upload"
+    df = _derive_blank_cells(df, issues, frac, capacities)
     df = df[[*LOG_COLS, "source"]].sort_values(["tid", "date"]).reset_index(drop=True)
     for c in LOG_COLS[2:]:
         df[c] = df[c].astype("int64")
     return df, issues
+
+
+def _derive_blank_cells(df: pd.DataFrame, issues: list[Issue], frac: float, capacities: dict[str, int]):
+    """F6: per-row PRD 4.1 derivation of blank withdrawal/replenishment cells (columns present)."""
+    miss_w, miss_r = df["withdrawal"].isna(), df["replenishment"].isna()
+    if not (miss_w | miss_r).any():
+        return df
+    df = df.copy()
+    for c in ("withdrawal", "replenishment"):
+        df[c] = pd.to_numeric(df[c]).astype("float64")
+    op, cl = df["opening_balance"], df["closing_balance"]
+    only_r = miss_r & ~miss_w
+    df.loc[only_r, "replenishment"] = (cl - op + df["withdrawal"]).clip(lower=0)[only_r]
+    only_w = miss_w & ~miss_r
+    df.loc[only_w, "withdrawal"] = (op + df["replenishment"] - cl)[only_w]
+    both = miss_w & miss_r
+    if both.any():  # neither flow known: balance-jump detection over the TID's balances
+        est = _derive(df[["tid", "date", "opening_balance", "closing_balance"]], frac, capacities)
+        est = est.set_index(["tid", "date"]).reindex(pd.MultiIndex.from_frame(df[["tid", "date"]]))
+        for c in ("withdrawal", "replenishment"):
+            df.loc[both, c] = est[c].to_numpy()[both.to_numpy()]
+    derived = miss_w | miss_r
+    df.loc[derived, "source"] = "derived"
+    for (tid, col), g in pd.concat(
+        [
+            df.loc[miss_w, ["tid", "date"]].assign(col="withdrawal"),
+            df.loc[miss_r, ["tid", "date"]].assign(col="replenishment"),
+        ]
+    ).groupby(["tid", "col"], sort=True):
+        n = len(g)
+        issues.append(
+            Issue(
+                "info",
+                "DERIVED_VALUE",
+                f"{col} blank on {n} row{'s' if n != 1 else ''}: derived from the balances (PRD 4.1)",
+                str(tid),
+                min(g["date"]),
+            )
+        )
+    for tid, d, w in zip(df["tid"][derived], df["date"][derived], df["withdrawal"][derived], strict=True):
+        if w < 0:
+            issues.append(
+                Issue("warning", "NEGATIVE_DERIVED", f"Derived withdrawal is negative ({int(w)})", tid, d)
+            )
+    return df
 
 
 def _derive(df: pd.DataFrame, frac: float, capacities: dict[str, int]) -> pd.DataFrame:

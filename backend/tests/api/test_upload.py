@@ -283,3 +283,34 @@ def test_context_scenarios_in_range(client):
     assert r.status_code == 200
     sc = {s["id"]: s["in_range"] for s in client.get("/api/context").json()["scenarios"]}
     assert sc == {"today": True, "pre_lebaran_2026": False, "year_end_2025": False}
+
+
+def test_bank_style_csv_uploads_without_row_loss(client):
+    # F6: ';' delimiter, dd/mm/yyyy, "Rp" prefix, blank replenishment on non-visit days -> every row stored.
+    import datetime as dt
+
+    lines = ["Terminal ID;Tanggal;Saldo Awal;Penarikan;Isi Ulang;Saldo Akhir"]
+    bal, d, n = 500_000_000, dt.date(2025, 1, 1), 0
+    for i in range(420):
+        w = (50 + (i * 37) % 70) * 1_000_000
+        rep = max(600_000_000 - bal, 0) if i % 4 == 0 else 0
+        op = bal
+        bal = op + rep - w
+        rep_cell = f"Rp {rep}" if i % 4 == 0 else ""
+        lines.append(f"CL-01;{d.strftime('%d/%m/%Y')};Rp {op};Rp {w};{rep_cell};Rp {bal}")
+        d += dt.timedelta(days=1)
+        n += 1
+    r = _upload(client, "bank.csv", "\n".join(lines).encode(), mode="replace")
+    assert r.status_code == 200
+    issues = r.json()["issues"]
+    assert not [i for i in issues if i["severity"] == "error"], issues[:5]
+    assert _codes(issues, "DERIVED_VALUE")
+    rows = client.get("/api/data/log?tid=CL-01&page_size=1000").json()
+    assert rows["total"] == n
+    by = {x["date"]: x for x in rows["rows"]}
+    assert by["2025-01-02"]["replenishment"] == 0 and by["2025-01-02"]["source"] == "derived"
+    assert by["2025-01-05"]["source"] == "upload"  # i = 4: a visit day with the cell filled
+    assert all(
+        x["opening_balance"] + x["replenishment"] - x["withdrawal"] == x["closing_balance"]
+        for x in rows["rows"]
+    )
