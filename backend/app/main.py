@@ -62,6 +62,8 @@ def mount_spa(app: FastAPI, dist) -> None:
     # registered after the API routers, so /api, /docs and /openapi.json always win
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa(full_path: str):
+        # if full_path == "api" or full_path.startswith("api/"):
+        #     raise ApiError(404, "NOT_FOUND", f"unknown API path /{full_path}")
         target = (root / full_path).resolve()
         if full_path and target.is_file() and root in target.parents:
             return FileResponse(target)
