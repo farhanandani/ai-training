@@ -34,11 +34,29 @@ test("pre-lebaran shows risk and overstock (AC9)", async ({ page }) => {
 
 test("planner reallocation at 70% (AC9)", async ({ page }) => {
   await page.goto("/planner");
+  const funded = page.getByText("Funded", { exact: true }).locator("xpath=following-sibling::div[1]");
+  await expect(funded).toHaveText("100%", { timeout: FIRST_LOAD_MS }); // unconstrained before the click
   await page.getByRole("button", { name: "70% of need" }).click();
-  const count = page.getByTestId("sankey-links-count").last();
-  await expect
-    .poll(async () => Number((await count.textContent()) ?? "0"), { timeout: FIRST_LOAD_MS })
-    .toBeGreaterThan(0);
+  // the click took effect: budget input enabled and filled, Unconstrained unticked, ~70% of need funded
+  await expect(page.getByLabel("Unconstrained")).not.toBeChecked();
+  const budget = page.getByLabel("Budget (IDR)");
+  await expect(budget).toBeEnabled();
+  await expect(budget).toHaveValue(/^\d{1,3}(\.\d{3})+$/);
+  // (the plan refetches after a 300 ms debounce: wait until funded leaves 100%)
+  await expect.poll(async () => (await funded.textContent()) ?? "", { timeout: 30_000 }).not.toBe("100%");
+  await expect(page.getByText(/^Budget Rp /)).toBeVisible();
+  const pct = Number.parseInt(((await funded.textContent()) ?? "0").replace("%", ""), 10);
+  console.log(`Planner 70%: funded ${pct}%`);
+  expect(pct).toBeGreaterThanOrEqual(60);
+  expect(pct).toBeLessThanOrEqual(80);
+  // visible sankey count (the hidden "0" placeholder is excluded)
+  // const count = page.getByTestId("sankey-links-count").last();
+  // await expect
+  //   .poll(async () => Number((await count.textContent()) ?? "0"), { timeout: FIRST_LOAD_MS })
+  //   .toBeGreaterThan(0);
+  const count = page.locator('[data-testid="sankey-links-count"]:visible');
+  await expect(count).toHaveCount(1, { timeout: 30_000 });
+  expect(Number(await count.textContent())).toBeGreaterThan(0);
 });
 
 test("no network requests leave 127.0.0.1:8123 across all routes (TR-04 offline evidence)", async ({ page }) => {
@@ -57,7 +75,12 @@ test("edit recompute (AC5)", async ({ page }) => {
   const tid = "TID-JKT-0001";
   await page.goto("/");
   await fleetReady(page);
-  const amount = () => page.getByRole("row").filter({ hasText: tid }).locator("td").nth(5);
+  // const amount = () => page.getByRole("row").filter({ hasText: tid }).locator("td").nth(5);
+  const col = await page
+    .locator("thead th")
+    .evaluateAll((ths) => ths.findIndex((t) => /Recommended refill/.test(t.textContent ?? "")));
+  expect(col).toBeGreaterThanOrEqual(0);
+  const amount = () => page.getByRole("row").filter({ hasText: tid }).locator("td").nth(col);
   const before = (await amount().textContent()) ?? "";
   expect(before).toMatch(/\d/);
 
@@ -73,11 +96,19 @@ test("edit recompute (AC5)", async ({ page }) => {
   await page.keyboard.type("1000000");
   await page.keyboard.press("Enter");
 
+  // wait for the PATCH to be accepted before leaving the page
+  const saved = page.waitForResponse(
+    (r) => r.url().includes("/api/data/log") && r.request().method() === "PATCH",
+  );
   await page.getByRole("button", { name: /Save changes/ }).click();
   const t0 = Date.now();
+  expect((await saved).ok()).toBe(true);
   await page.getByRole("link", { name: "Fleet", exact: true }).click();
   await expect.poll(async () => (await amount().textContent()) ?? "", { timeout: 10_000 }).not.toBe(before);
   await expect(page.getByText(/^Forecasting \d+(\/| more)/)).toHaveCount(0, { timeout: 10_000 });
   const after = ((await amount().textContent()) ?? "").trim();
+  expect(after).toMatch(/\d/);
+  expect(after).not.toBe(before.trim());
+  expect(Date.now() - t0).toBeLessThan(10_000); // AC5 budget from the save click
   console.log(`AC5: recommended amount ${before.trim()} -> ${after} in ${Date.now() - t0} ms after save`);
 });

@@ -8,7 +8,10 @@ import { join, resolve } from "node:path";
 const PORT = 8123;
 const backend = resolve(process.cwd(), "..", "backend");
 const python = join(backend, ".venv", "Scripts", "python.exe");
-const workspaceDb = join(mkdtempSync(join(tmpdir(), "cashfc-e2e-")), "workspace.db");
+// const workspaceDb = join(mkdtempSync(join(tmpdir(), "cashfc-e2e-")), "workspace.db");
+// config is re-loaded in each worker: create the temp dir once (main process) and share it through the env
+process.env.CASHFC_E2E_DB ??= join(mkdtempSync(join(tmpdir(), "cashfc-e2e-")), "workspace.db");
+const workspaceDb = process.env.CASHFC_E2E_DB;
 
 export default defineConfig({
   testDir: "./tests/e2e",
