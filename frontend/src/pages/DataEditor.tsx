@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useVersionedState } from "../lib/useVersionedState";
 import { AgGridReact } from "ag-grid-react";
 import type { CellValueChangedEvent, ColDef } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
@@ -42,7 +43,14 @@ type Cb = { onSuccess: (r: WriteResponse) => void; onError: (e: unknown) => void
 
 const keyOf = (r: { tid: string; date: string }) => `${r.tid}|${r.date}`;
 const errText = (e: unknown) => (e instanceof ApiRequestError ? `${e.code}: ${e.message}` : String(e));
-const int = (v: unknown) => Math.max(0, Math.round(Number(String(v).replace(/\D/g, "")) || 0));
+/** Strict non-negative integer; null when empty, negative, fractional or with stray characters. */
+const parseCount = (v: unknown): number | null => {
+  const t = String(v ?? "").trim().replace(/\./g, "");
+  return /^\d+$/.test(t) ? Number(t) : null;
+};
+const BAD_NUM = "Enter a whole number of 0 or more (no decimals, no minus sign).";
+const SELECTION = { mode: "multiRow", checkboxes: true, headerCheckbox: true, enableClickSelection: false } as const;
+// const int = (v: unknown) => Math.max(0, Math.round(Number(String(v).replace(/\D/g, "")) || 0));
 const idNum = new Intl.NumberFormat("id-ID");
 
 type Edit = Partial<LogRow> & { tid: string; date: string };
@@ -53,7 +61,9 @@ function LogTab({ onWrite }: { onWrite: (r: WriteResponse) => void }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
-  const [edits, setEdits] = useState<Record<string, Edit>>({});
+  // const [edits, setEdits] = useState<Record<string, Edit>>({});
+  // unsaved edits are dropped whenever the dataset changes underneath them (reset, upload, other writes)
+  const [edits, setEdits] = useVersionedState<Record<string, Edit>>(ctx?.dataset_version, {});
   const [selected, setSelected] = useState<LogRow[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -73,7 +83,8 @@ function LogTab({ onWrite }: { onWrite: (r: WriteResponse) => void }) {
   );
   const cols = useMemo<ColDef<LogRow>[]>(
     () => [
-      { headerName: "TID", field: "tid", width: 190, checkboxSelection: true, headerCheckboxSelection: true },
+      // { headerName: "TID", field: "tid", width: 190, checkboxSelection: true, headerCheckboxSelection: true },
+      { headerName: "TID", field: "tid", width: 190 },
       { headerName: "Date", field: "date", width: 130 },
       ...NUM_FIELDS.map<ColDef<LogRow>>((f) => ({
         headerName: f.replace("_", " ").replace(/^./, (c) => c.toUpperCase()),
@@ -82,10 +93,23 @@ function LogTab({ onWrite }: { onWrite: (r: WriteResponse) => void }) {
         type: "rightAligned",
         flex: 1,
         valueFormatter: (p) => (p.value == null ? "" : idNum.format(p.value)),
-        valueParser: (p) => int(p.newValue),
+        // valueParser: (p) => int(p.newValue),
+        valueParser: (p) => parseCount(p.newValue),
+        // invalid input keeps the old value and shows an inline message
+        valueSetter: (p) => {
+          if (p.newValue === null || p.newValue === undefined) {
+            setMsg(BAD_NUM);
+            return false;
+          }
+          if (p.newValue === p.data[f]) return false;
+          setMsg(null);
+          p.data[f] = p.newValue;
+          return true;
+        },
       })),
       { headerName: "Source", field: "source", width: 110 },
     ],
+    // [],
     [],
   );
 
@@ -112,16 +136,22 @@ function LogTab({ onWrite }: { onWrite: (r: WriteResponse) => void }) {
     del.mutate({ keys: selected.map((r) => ({ tid: r.tid, date: r.date })) }, cb(() => setSelected([])) as never);
   const add = () => {
     if (!draft.tid.trim() || !ISO.test(draft.date)) return setMsg("Enter a TID and a date (yyyy-mm-dd).");
+    const nums = NUM_FIELDS.map((f) => parseCount(draft[f]));
+    if (nums.some((n) => n === null)) return setMsg(BAD_NUM);
     post.mutate(
       {
         rows: [
           {
             tid: draft.tid.trim(),
             date: draft.date,
-            opening_balance: int(draft.opening_balance),
-            withdrawal: int(draft.withdrawal),
-            replenishment: int(draft.replenishment),
-            closing_balance: int(draft.closing_balance),
+            // opening_balance: int(draft.opening_balance),
+            // withdrawal: int(draft.withdrawal),
+            // replenishment: int(draft.replenishment),
+            // closing_balance: int(draft.closing_balance),
+            opening_balance: nums[0]!,
+            withdrawal: nums[1]!,
+            replenishment: nums[2]!,
+            closing_balance: nums[3]!,
           },
         ],
       },
@@ -190,6 +220,11 @@ function LogTab({ onWrite }: { onWrite: (r: WriteResponse) => void }) {
           <button type="button" className={primary} disabled={dirty === 0 || patch.isPending} onClick={save}>
             Save changes{dirty ? ` (${dirty})` : ""}
           </button>
+          {dirty > 0 && (
+            <span role="status" className="text-xs text-amber-700">
+              {dirty} unsaved change{dirty === 1 ? "" : "s"}
+            </span>
+          )}
         </div>
       </div>
       {adding && (
@@ -222,8 +257,9 @@ function LogTab({ onWrite }: { onWrite: (r: WriteResponse) => void }) {
           columnDefs={cols}
           getRowId={(p) => keyOf(p.data)}
           domLayout="autoHeight"
-          rowSelection="multiple"
-          suppressRowClickSelection
+          // rowSelection="multiple"
+          // suppressRowClickSelection
+          rowSelection={SELECTION}
           onSelectionChanged={(e) => setSelected(e.api.getSelectedRows())}
           onCellValueChanged={onChange}
           animateRows={false}
@@ -255,7 +291,8 @@ function TableTab<T extends object>({
   onWrite,
 }: {
   rows: T[];
-  cols: ColDef<T>[];
+  // cols: ColDef<T>[];
+  cols: (onInvalid: (m: string) => void) => ColDef<T>[];
   blank: T;
   save: (rows: T[], cb: Cb) => void;
   saving: boolean;
@@ -265,6 +302,7 @@ function TableTab<T extends object>({
   const [selected, setSelected] = useState<T[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const rows = local ?? serverRows;
+  const colDefs = useMemo(() => cols(setMsg), [cols]);
   return (
     <div className={card}>
       <div className="flex flex-wrap items-center gap-2">
@@ -305,10 +343,12 @@ function TableTab<T extends object>({
       <div className="ag-theme-quartz mt-3" style={{ width: "100%" }}>
         <AgGridReact<T>
           rowData={rows}
-          columnDefs={cols}
+          // columnDefs={cols}
+          columnDefs={colDefs}
           domLayout="autoHeight"
-          rowSelection="multiple"
-          suppressRowClickSelection
+          // rowSelection="multiple"
+          // suppressRowClickSelection
+          rowSelection={SELECTION}
           onSelectionChanged={(e) => setSelected(e.api.getSelectedRows())}
           onCellValueChanged={() => setLocal([...rows])}
           animateRows={false}
@@ -318,28 +358,49 @@ function TableTab<T extends object>({
   );
 }
 
-const numCol = (field: keyof MasterRow, name: string): ColDef<MasterRow> => ({
+// const numCol = (field: keyof MasterRow, name: string): ColDef<MasterRow> => ({
+const numCol = (field: keyof MasterRow, name: string, onInvalid: (m: string) => void): ColDef<MasterRow> => ({
   headerName: name,
   field,
   editable: true,
   type: "rightAligned",
   width: 150,
-  valueParser: (p) => int(p.newValue),
+  // valueParser: (p) => int(p.newValue),
+  valueParser: (p) => parseCount(p.newValue),
+  valueSetter: (p) => {
+    if (p.newValue === null || p.newValue === undefined) {
+      onInvalid(BAD_NUM);
+      return false;
+    }
+    if (p.newValue === p.data[field]) return false;
+    (p.data as Record<string, unknown>)[field] = p.newValue;
+    return true;
+  },
 });
-const MASTER_COLS: ColDef<MasterRow>[] = [
-  { headerName: "TID", field: "tid", editable: true, width: 140, checkboxSelection: true },
+// const MASTER_COLS: ColDef<MasterRow>[] = [
+const MASTER_COLS = (onInvalid: (m: string) => void): ColDef<MasterRow>[] => [
+  // { headerName: "TID", field: "tid", editable: true, width: 140, checkboxSelection: true },
+  { headerName: "TID", field: "tid", editable: true, width: 140 },
   { headerName: "Location", field: "location_name", editable: true, flex: 1, minWidth: 180 },
   { headerName: "Type", field: "location_type", editable: true, width: 120 },
-  numCol("capacity", "Capacity"),
-  numCol("min_safe_balance", "Min safe balance"),
-  numCol("replenish_cycle_days", "Cycle (days)"),
-  numCol("denomination", "Denomination"),
-  numCol("cost_per_visit", "Cost per visit"),
-  numCol("current_fill_level", "Current fill"),
+  // numCol("capacity", "Capacity"),
+  numCol("capacity", "Capacity", onInvalid),
+  // numCol("min_safe_balance", "Min safe balance"),
+  numCol("min_safe_balance", "Min safe balance", onInvalid),
+  // numCol("replenish_cycle_days", "Cycle (days)"),
+  numCol("replenish_cycle_days", "Cycle (days)", onInvalid),
+  // numCol("denomination", "Denomination"),
+  numCol("denomination", "Denomination", onInvalid),
+  // numCol("cost_per_visit", "Cost per visit"),
+  numCol("cost_per_visit", "Cost per visit", onInvalid),
+  // numCol("current_fill_level", "Current fill"),
+  numCol("current_fill_level", "Current fill", onInvalid),
   { headerName: "Next visit", field: "next_visit_date", editable: true, width: 130 },
 ];
-const HOLIDAY_COLS: ColDef<HolidayRow>[] = [
-  { headerName: "Date", field: "date", editable: true, width: 150, checkboxSelection: true },
+// const HOLIDAY_COLS: ColDef<HolidayRow>[] = [
+const HOLIDAY_COLS = (): ColDef<HolidayRow>[] => [
+  // { headerName: "Date", field: "date", editable: true, width: 150, checkboxSelection: true },
+  { headerName: "Date", field: "date", editable: true, width: 150 },
   { headerName: "Name", field: "name", editable: true, flex: 1 },
   {
     headerName: "Type",
@@ -402,6 +463,7 @@ export function DataEditorPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const validation = useValidation();
   const reset = useResetData();
+  const [resetErr, setResetErr] = useState<string | null>(null);
 
   // issues returned by the last write win over the stored list until the next one; the header shows the
   // recompute job via the fleet read (pending_tids), which the write invalidates
@@ -473,6 +535,11 @@ export function DataEditorPage() {
             <p className="text-sm text-slate-800">
               Reset all data to the dummy dataset? Uploaded data and edits will be lost.
             </p>
+            {resetErr && (
+              <p role="alert" className="mt-2 text-sm text-red-700">
+                {resetErr}
+              </p>
+            )}
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" className={btn} onClick={() => setConfirmReset(false)}>
                 Cancel
@@ -483,12 +550,15 @@ export function DataEditorPage() {
                 disabled={reset.isPending}
                 onClick={() =>
                   reset.mutate(undefined, {
-                    onSuccess: (r) => {
+                    // onSuccess: (r) => {
+                    onSuccess: () => {
                       setLastIssues(null);
                       setNotice("Data reset to the dummy dataset.");
-                      void r;
+                      // void r;
+                      setResetErr(null);
                       setConfirmReset(false);
                     },
+                    onError: (e) => setResetErr(errText(e)),
                   })
                 }
               >
