@@ -10,6 +10,8 @@ export type PlanRequest = S["PlanRequest"];
 export type PlanResponse = S["PlanResponse"];
 export type StatusResponse = S["StatusResponse"];
 export type OverridesRequest = S["OverridesRequest"];
+export type SettingsResponse = S["SettingsResponse"];
+export type SettingsUpdate = S["SettingsUpdate"];
 export type SL = "p50" | "p80" | "p90" | "p95";
 
 export class ApiRequestError extends Error {

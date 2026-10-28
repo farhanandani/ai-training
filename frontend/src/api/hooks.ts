@@ -7,6 +7,8 @@ import type {
   FleetResponse,
   OverridesRequest,
   PlanResponse,
+  SettingsResponse,
+  SettingsUpdate,
   StatusResponse,
 } from "./client";
 import { useControls } from "../state/controls";
@@ -83,7 +85,8 @@ export function useJobStatus(jobId: string | null | undefined) {
 }
 
 function refreshViews(qc: QueryClient) {
-  for (const k of ["fleet", "atm", "plan", "accuracy"]) void qc.invalidateQueries({ queryKey: [k] });
+  // for (const k of ["fleet", "atm", "plan", "accuracy"]) void qc.invalidateQueries({ queryKey: [k] });
+  for (const k of ["fleet", "atm", "plan", "accuracy", "settings"]) void qc.invalidateQueries({ queryKey: [k] });
 }
 
 /** Write helper: after any write the dataset_version may have changed, so refetch the context and every view. */
@@ -107,3 +110,9 @@ export const useResetData = () => useApiMutation<undefined>("POST", "/api/data/r
 export const useUploadData = () => useApiMutation<FormData>("POST", "/api/data/upload");
 export const useSaveOverrides = () => useApiMutation<OverridesRequest>("PUT", "/api/plan/overrides");
 export const useClearOverrides = () => useApiMutation<undefined>("DELETE", "/api/plan/overrides");
+
+export function useSettings() {
+  return useQuery({ queryKey: ["settings"], queryFn: () => api<SettingsResponse>("/api/settings") });
+}
+/** Light-layer settings (overstock threshold, idle rate): saved, then every view refetches. */
+export const useSaveSettings = () => useApiMutation<SettingsUpdate, SettingsResponse>("PUT", "/api/settings");
