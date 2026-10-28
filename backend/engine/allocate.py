@@ -97,6 +97,16 @@ class _State:
             self.q, self.q50, i, end, self.bal_before(k), m.capacity, m.min_safe_balance, m.denomination
         )[1]
 
+    def spans_manual_skip(self, k: int) -> bool:
+        """True if visit k's need window (to the next loading visit) covers a visit the user skipped."""
+        m, v = self.plan.master, self.plan.visits[k]
+        i = _idx(v.date, self.fc.as_of)
+        loading = [_idx(u.date, self.fc.as_of) for u in self.plan.visits if "skip" not in u.flags]
+        end = need_window_end(i, loading, m.replenish_cycle_days)
+        return any(
+            u.manual and _is_skip(u) and i < _idx(u.date, self.fc.as_of) <= end for u in self.plan.visits
+        )
+
     def slack(self, k: int) -> int:
         """Largest extra load on visit k that never makes the simulator clamp this or a later allocated load."""
         cap = self.plan.master.capacity
@@ -214,6 +224,12 @@ def allocate(
             st.alloc[k] += x
             remaining -= x
 
+    # F1: Tier-1 need recomputed on the FINAL allocation (Tier 2 may have raised earlier balances).
+    final_t1 = {
+        n: [0 if _is_skip(v) else st.need_tier1(k) for k, v in enumerate(st.plan.visits)]
+        for n, st in states.items()
+    }
+
     out: list[AtmPlan] = []
     underfunded = 0
     for n, p in enumerate(plans):
@@ -227,9 +243,14 @@ def allocate(
         for k, v in enumerate(new.visits):
             if _is_skip(v):
                 continue
+            # if not v.manual:
+            #     v.tier1_need = st.tier1[k]
+            # short = v.allocated < (v.amount if v.manual else v.tier1_need)
+            t1 = final_t1[n][k]
             if not v.manual:
-                v.tier1_need = st.tier1[k]
-            short = v.allocated < (v.amount if v.manual else v.tier1_need)
+                v.tier1_need = t1
+            # a fully funded visit is flagged only when its window spans a user's manual skip (T9 ruling)
+            short = v.allocated < (t1 if st.spans_manual_skip(k) else min(int(v.amount), t1))
             if short:
                 i = _idx(v.date, st.fc.as_of)
                 below = np.flatnonzero(new.projection_p50[i:] < mn)

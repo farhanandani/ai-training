@@ -1,3 +1,4 @@
+import itertools
 import re
 from dataclasses import asdict
 from datetime import date, timedelta
@@ -266,3 +267,52 @@ def test_manual_skip_never_overfunds_and_is_monotonic():
         if prev is not None:
             assert all(a >= b for a, b in zip(got, prev, strict=True)), (budget, got, prev)
         prev = got
+
+
+def _skip_in_window(plan, k) -> bool:
+    """True if visit k's need window (to the next loading visit) spans a user's manual skip."""
+    v = plan.visits[k]
+    nxt = min((u.date for u in plan.visits if u.date > v.date and "skip" not in u.flags), default=None)
+    end = nxt if nxt is not None else v.date + timedelta(days=plan.master.replenish_cycle_days)
+    return any(u.manual and "skip" in u.flags and v.date < u.date < end for u in plan.visits)
+
+
+def _fixture_with_cap_bound():
+    """The fixture plus E: a capacity-bound ATM (room-capped loads + extra visits), where Tier-1 needs
+    computed mid-allocation exceed the final ones (reviewer F1)."""
+    plans, fcs, _ = _fixture()
+    fcs = {**fcs, "E": _fc("E", 100 * M, 150 * M)}
+    e = recommend(_master("E", cap=400 * M), fcs["E"], 200 * M, AS_OF, H, SL, [_d(2), _d(6), _d(10)], [])
+    return [*plans, e], fcs
+
+
+def test_fully_funded_visit_never_underfunded():
+    # F1: a visit allocated its full plan amount (no manual skip in its window) is never flagged.
+    plans, fcs = _fixture_with_cap_bound()
+    need = _need(plans)
+    for budget in range(0, need + 1, 10 * M):
+        out = allocate(plans, fcs, SL, budget)
+        for p in out.plans:
+            for k, v in enumerate(p.visits):
+                if v.allocated == v.amount and not _skip_in_window(p, k):
+                    assert "underfunded" not in v.flags, (budget, p.tid, v)
+        assert out.underfunded == sum("underfunded" in v.flags for p in out.plans for v in p.visits)
+
+
+def test_underfunded_count_monotone_in_budget():
+    plans, fcs = _fixture_with_cap_bound()
+    need = _need(plans)
+    counts = [allocate(plans, fcs, SL, b).underfunded for b in range(0, need + 1, 10 * M)]
+    assert all(a >= b for a, b in itertools.pairwise(counts)), counts
+
+
+def test_manual_skip_window_still_flagged_when_fully_funded():
+    # T9 ruling kept: day-4 visit funded at its full plan amount but its window spans the manual skip.
+    fc = _fc("B", 100 * M, 130 * M)
+    ovr = [Override("B", _d(8), None, skipped=True)]
+    plan = recommend(_master("B"), fc, 600 * M, AS_OF, H, SL, [_d(4), _d(8), _d(12)], ovr)
+    out = allocate([plan], {"B": fc}, SL, 920 * M)
+    v4 = out.plans[0].visits[0]
+    assert v4.date == _d(4) and v4.allocated == v4.amount == 410 * M
+    assert v4.tier1_need > v4.allocated
+    assert "underfunded" in v4.flags
