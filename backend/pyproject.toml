@@ -27,6 +27,7 @@ include = ["engine*", "app*"]
 [tool.pytest.ini_options]
 markers = ["perf: timing tests, run manually", "slow: golden model tests"]
 testpaths = ["tests"]
+addopts = '-m "not perf and not slow"'
 
 [tool.ruff]
 line-length = 110

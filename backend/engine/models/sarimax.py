@@ -15,6 +15,7 @@ from .base import future_index, quantiles_from_intervals
 S = 7
 MAXITER = 200
 GRID_MAXITER = 100  # grid search only; the selected model is refit with MAXITER
+GRID_DAYS = 365  # the order grid is fit on the trailing year only; final fit and backtests use full history
 
 
 def _d(ly: pd.Series) -> int:
@@ -46,6 +47,8 @@ def _fit(
 
 
 def select_sarimax_order(y: pd.Series, X: pd.DataFrame | None) -> tuple[tuple, tuple, float]:
+    y = y.iloc[-GRID_DAYS:]
+    X = None if X is None else X.iloc[-GRID_DAYS:]
     ly = np.log1p(y.astype(float))
     d = _d(ly)
     best = None

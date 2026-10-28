@@ -9,18 +9,22 @@ import engine.forecast as fc
 from engine.calendar import HolidaysNotCovered
 from engine.forecast import ForecastResult, run_tid, select_model
 from engine.models import QCOLS
+from engine.models.ets import Ets
 from engine.models.sarimax import Sarimax
 
 AS_OF = date(2026, 3, 6)
 NAMES = {"seasonal_naive", "ets", "sarimax"}
 FIXED_ORDERS = ((1, 1, 1), (1, 0, 1, 7), 0.0)
+FAST_ORDERS = ((0, 0, 0), (0, 0, 0, 7), 0.0)  # what the grid picks for most dummy TIDs
 
 
 def _stub_backtest(y, holidays, as_of, sarimax_orders):
     return {"seasonal_naive": [], "ets": [], "sarimax": [], "_failures": []}
 
 
-def test_run_tid_shapes(log_df, holidays_df):
+# def test_run_tid_shapes(log_df, holidays_df):
+def test_run_tid_shapes(monkeypatch, log_df, holidays_df):
+    monkeypatch.setattr(fc, "select_sarimax_order", lambda y, X: FAST_ORDERS)
     r = run_tid("TID-JKT-0008", log_df, holidays_df, AS_OF)
     assert isinstance(r, ForecastResult)
     assert len(r.forecast) == 30
@@ -30,7 +34,8 @@ def test_run_tid_shapes(log_df, holidays_df):
     assert r.model in NAMES
     assert pd.api.types.is_integer_dtype(r.fitted_q50)
     payload = r.to_payload()
-    json.dumps(payload)
+    # json.dumps(payload)
+    json.dumps(payload, allow_nan=False)
     back = ForecastResult.from_payload(json.loads(json.dumps(payload)))
     assert back.model == r.model
     assert back.as_of == r.as_of
@@ -83,6 +88,7 @@ def test_fallback_on_final_fit_error(monkeypatch, log_df, holidays_df):
 
 
 def test_explanations_pre_lebaran(monkeypatch, log_df, holidays_df):
+    monkeypatch.setattr(fc, "select_sarimax_order", lambda y, X: FAST_ORDERS)
     monkeypatch.setattr(fc, "run_backtest", _stub_backtest)
     monkeypatch.setattr(fc, "select_model", lambda bt, n: "sarimax")
     r = run_tid("TID-JKT-0007", log_df, holidays_df, AS_OF)
@@ -102,3 +108,32 @@ def test_explanations_weekday_for_naive(monkeypatch, log_df, holidays_df):
     assert len(ex) == 1
     assert ex[0].startswith("vs recent Fri ")
     assert ex[0].endswith("%")
+
+
+def test_fallback_on_non_finite_forecast(monkeypatch, log_df, holidays_df):
+    monkeypatch.setattr(fc, "select_sarimax_order", lambda y, X: FAST_ORDERS)
+    monkeypatch.setattr(fc, "run_backtest", _stub_backtest)
+    monkeypatch.setattr(fc, "select_model", lambda bt, n: "ets")
+
+    def predict(self, h, X_future=None):
+        idx = pd.date_range(self._y.index[-1] + pd.Timedelta(days=1), periods=h, freq="D")
+        return pd.DataFrame(np.inf, index=idx, columns=QCOLS)
+
+    monkeypatch.setattr(Ets, "predict", predict)
+    r = run_tid("TID-JKT-0008", log_df, holidays_df, AS_OF)
+    assert r.model == "seasonal_naive"
+    assert r.diagnostics["fallback"] is True
+    assert "non-finite" in r.diagnostics["error"]
+    assert np.isfinite(r.forecast[QCOLS].to_numpy(dtype=float)).all()
+
+
+def test_too_few_origins_falls_back(monkeypatch, log_df, holidays_df):
+    monkeypatch.setattr(fc, "select_sarimax_order", lambda y, X: FAST_ORDERS)
+    tid = "TID-JKT-0008"
+    short = log_df[(log_df["tid"] == tid) & (log_df["date"] > AS_OF - timedelta(days=300))]
+    r = run_tid(tid, short, holidays_df, AS_OF)
+    assert r is not None
+    assert r.model == "seasonal_naive"
+    assert r.diagnostics["fallback"] is True
+    assert r.backtest == {}
+    assert "origins" in r.diagnostics["error"]

@@ -200,6 +200,9 @@ def _weekday_explanations(y: pd.Series, as_of: date, q50: pd.Series) -> dict[dat
 def _final(name: str, orders, y, X_hist, X_fut, as_of):
     model = _make(name, orders).fit(y, X_hist)
     pred = model.predict(HORIZON, X_fut)
+    if not np.isfinite(pred[QCOLS].to_numpy(dtype=float)).all():
+        # garbage must not reach planning; the TR-41 fallback takes over
+        raise ValueError("non-finite forecast quantiles")
     if name == "sarimax":
         expl = _sarimax_explanations(model, X_fut)
     else:
@@ -233,11 +236,14 @@ def run_tid(tid: str, log: pd.DataFrame, holidays: pd.DataFrame, as_of: date) ->
 
     bt: dict = {}
     name: str | None = None
+    cause = "no model selected"
     try:
         bt = run_backtest(y, holidays, as_of, sarimax_orders)
         name = select_model(bt, len(origins(y.index[0].date(), as_of)))
     except Exception as e:  # noqa: BLE001  falls back below (TR-41)
-        diag["warnings"].append(f"backtest/selection failed: {e}")
+        # diag["warnings"].append(f"backtest/selection failed: {e}")
+        cause = f"backtest/selection failed: {e}"
+        diag["warnings"].append(cause)
 
     leb = None
     if name is not None:
@@ -248,11 +254,13 @@ def run_tid(tid: str, log: pd.DataFrame, holidays: pd.DataFrame, as_of: date) ->
 
     try:
         if name is None:
-            raise RuntimeError("no model selected")
+            # raise RuntimeError("no model selected")
+            raise RuntimeError(cause)
         model, forecast, expl, fitted = _final(name, sarimax_orders, y, X_hist, X_fut, as_of)
     except Exception as e:  # noqa: BLE001  TR-41 fallback to seasonal naive
         diag["fallback"] = True
-        diag["error"] = f"{name}: {e}"
+        # diag["error"] = f"{name}: {e}"
+        diag["error"] = f"{name}: {e}" if name is not None else str(e)
         name = "seasonal_naive"
         model, forecast, expl, fitted = _final(name, None, y, X_hist, X_fut, as_of)
 

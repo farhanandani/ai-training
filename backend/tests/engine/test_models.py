@@ -1,3 +1,5 @@
+from functools import partial
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -35,7 +37,10 @@ def _future_X(h=30):
     return _X(pd.date_range(_idx()[-1] + pd.Timedelta(days=1), periods=h, freq="D"))
 
 
-MODELS = [SeasonalNaive, Ets, Sarimax]
+# MODELS = [SeasonalNaive, Ets, Sarimax]
+# fixed SARIMAX orders keep these fast; the order grid itself is covered by test_sarimax_order_grid_bounds
+_FAST_SARIMAX = partial(Sarimax, order=(1, 0, 0), seasonal_order=(1, 0, 0, 7))
+MODELS = [SeasonalNaive, Ets, pytest.param(_FAST_SARIMAX, id="Sarimax")]
 
 
 @pytest.mark.parametrize("cls", MODELS)
@@ -68,7 +73,8 @@ def test_sarimax_uses_exog():
 
 
 def test_sarimax_order_grid_bounds():
-    y = _series()
+    # y = _series()
+    y = _series().iloc[-90:]  # short series keeps the 36-candidate grid cheap
     (p, _d, q), (P, D, Q, s), aic = select_sarimax_order(y, _X(y.index))
     assert p <= 2 and q <= 2 and P <= 1 and Q <= 1 and D == 0 and s == 7
     assert np.isfinite(aic)
@@ -78,3 +84,22 @@ def test_sarimax_order_grid_bounds():
 def test_models_tolerate_nan(cls):
     y = _series(nan_frac=0.15)
     cls().fit(y, _X(y.index)).predict(7, _future_X(7))
+
+
+def test_order_grid_uses_trailing_year(monkeypatch):
+    import engine.models.sarimax as sm
+
+    seen = []
+
+    class _Res:
+        aic = 1.0
+
+    def fake_fit(ly, X, order, seasonal_order, d, caught=None, maxiter=sm.MAXITER):
+        seen.append((len(ly), len(X), maxiter))
+        return _Res()
+
+    monkeypatch.setattr(sm, "_fit", fake_fit)
+    y = _series()
+    select_sarimax_order(y, _X(y.index))
+    assert len(seen) == 36
+    assert all(n == sm.GRID_DAYS == 365 and nx == 365 and it <= 100 for n, nx, it in seen)
