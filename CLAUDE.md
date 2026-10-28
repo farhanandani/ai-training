@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Local web demo for **ATM cash forecasting & replenishment recommendation**, built to present to a client (bank / ATM fleet operator). At the moment the repo holds only the specs and the dummy dataset. `backend/`, `frontend/` and `scripts/` are planned and do not exist yet.
+Local web demo for **ATM cash forecasting & replenishment recommendation**, built to present to a client (bank / ATM fleet operator). The repo holds the specs, the dummy dataset, the FastAPI + engine backend (`backend/`), the React SPA (`frontend/`) and the launch scripts (`scripts/`).
 
 - `docs/PRD.md`: what to build, the formulas (forecast, need, extra visits, budget allocation, comparison), and acceptance criteria AC1–AC10. **This is the source of truth for business logic.**
 - `docs/ARCHITECTURE.md`: how to build it: repo layout, heavy/light compute split, cache keys, API table, test strategy.
@@ -15,23 +15,27 @@ The owner talks in Indonesian. The UI and the docs are in English.
 
 ## Commands
 
-Commands that work today (Python 3.13; the generator uses the stdlib only):
+Backend (Python 3.13, venv at `backend\.venv`; run pytest/ruff from `backend/`) and frontend (Vite + React) both exist now.
 
 ```
-python data/generate_dummy.py      # regenerate all CSVs in data/ (seeded, byte-for-byte reproducible)
-```
-
-Planned commands, from ARCHITECTURE.md §10–11, available once scaffolded:
-
-```
-scripts\run.ps1                    # demo: build SPA if stale, serve everything on 127.0.0.1:8000
+scriptsun.ps1                    # demo: build SPA if stale, serve everything on 127.0.0.1:8000 (-NoBrowser to skip opening it)
 scripts\dev.ps1                    # uvicorn --reload :8000 + vite :5173 (proxies /api)
-cd backend; pytest                 # all backend tests
+python data/generate_dummy.py      # regenerate all CSVs in data/ (seeded, byte-for-byte reproducible; stdlib only)
+
+cd backend; pytest                 # default fast suite (excludes slow + perf markers)
+cd backend; pytest -m slow         # golden model tests (AC3/AC4)
+cd backend; pytest -m perf         # timing tests (TR-45)
 cd backend; pytest tests/engine/test_allocate.py::test_name   # single test
-cd frontend; npm run build / npx vitest
+cd backend; ruff check .; ruff format --check .
+
+cd frontend; npm run lint
+cd frontend; npm test              # vitest run (unit/component)
+cd frontend; npm run build         # tsc -b && vite build
+cd frontend; npm run e2e           # build + Playwright smoke tests (uvicorn on :8123, fresh temp workspace DB; first run: npx playwright install chromium)
+cd frontend; npm run gen:api       # regenerate src/api/schema.d.ts from a running backend on :8000
 ```
 
-numpy, pandas and statsmodels are **not** installed globally yet. The backend will need a `.venv`.
+Env overrides use the `CASHFC_` prefix (see `backend/app/settings.py`): `WORKSPACE_DB`, `PORT`, `WARMUP_SCENARIOS`, `WORKERS`, `FRONTEND_DIST`, ...
 
 ## Data (`data/`)
 
