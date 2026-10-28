@@ -38,3 +38,12 @@ def master_list() -> list[AtmMaster]:
 @pytest.fixture(scope="session")
 def holidays_df() -> pd.DataFrame:
     return _load("holidays_id.csv", "holidays")
+
+
+@pytest.fixture
+def store(tmp_path, seed_dir):
+    from app.store import Store
+
+    s = Store(tmp_path / "workspace.db", seed_dir)
+    yield s
+    s.close()
