@@ -1,6 +1,7 @@
 import type { Comparison, PolicyStats } from "./planRows";
 import { formatRp } from "../lib/format";
 
+// type Row = { label: string; get: (s: PolicyStats) => number; fmt: (n: number) => string };
 type Row = { label: string; get: (s: PolicyStats) => number; fmt: (n: number) => string; neutral?: boolean };
 const int = (n: number) => String(n);
 const ROWS: Row[] = [
@@ -9,6 +10,7 @@ const ROWS: Row[] = [
   { label: "Idle cash cost", get: (s) => s.idle_cost, fmt: formatRp },
   { label: "Visits", get: (s) => s.visits, fmt: int },
   { label: "Visit cost", get: (s) => s.visit_cost, fmt: formatRp },
+  // { label: "Cash loaded", get: (s) => s.loaded, fmt: formatRp },
   { label: "Cash loaded", get: (s) => s.loaded, fmt: formatRp, neutral: true },
 ];
 

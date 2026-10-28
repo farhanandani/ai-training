@@ -120,6 +120,7 @@ export function PlannerPage() {
   const budget = useDebounced(budgetInput, 300);
 
   const base = usePlan(null); // unconstrained plan: the "70% of need" reference (shares the cache when unconstrained)
+  // const { data: plan, isLoading, error } = usePlan(budget);
   const { data: plan, error, isFetching } = usePlan(budget);
   const fleet = useFleet();
   const names = useMemo(
@@ -170,7 +171,7 @@ export function PlannerPage() {
         Could not load the plan: {error.message}
       </div>
     );
-  // if (isLoading || !plan) return
+  // if (isLoading || !plan) return <Spinner label="Building the allocation plan" />;
   if (!plan) return <Spinner label="Building the allocation plan" />;
 
   const needBase = base.data?.need_total ?? plan.need_total;
