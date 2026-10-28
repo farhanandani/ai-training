@@ -110,6 +110,16 @@ def test_derive_withdrawal_and_replenishment():
 
 def test_derive_uses_same_weekday_median():
     hdr = "tid,date,opening_balance,closing_balance"
+    # rows = []
+    # bal = 900
+    # for k in range(9):  # 03-01 .. 03-09: withdrawal 10 on 03-01 and 03-08, else 5
+    #     w = 10 if k in (0, 7) else 5
+    #     rows.append(f"A,{date(2026, 3, 1 + k)},{bal},{bal - w}")
+    #     bal -= w
+    # rows.append(f"A,2026-03-10,{bal},{bal + 500}")  # jump; same weekday 03-03 had w=5
+    # df, _ = read_table(csv_bytes(rows, hdr=hdr), "a.csv", "log", capacities={"A": 1000})
+    # last = df.iloc[-1]
+    # assert last.withdrawal == 5 and last.replenishment == 505
     # 03-01..03-09 withdrawals: 03-02 (Mon) and 03-09 (Mon) = 40, all other days = 10.
     # Jump on 03-16 (Mon): same-weekday prior values {40, 40} -> median 40,
     # while the median of all prior days is 10.

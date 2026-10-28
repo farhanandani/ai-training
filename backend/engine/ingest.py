@@ -216,6 +216,22 @@ def _read_log(body, idx, cell, issues: list[Issue]) -> pd.DataFrame:
         if not tid:
             issues.append(Issue("error", "BAD_TID", "Missing tid", None, d))
             continue
+        # rec: dict[str, Any] = {"tid": tid, "date": d}
+        # ok = True
+        # for c in amount_cols:
+        #     raw = cell(r, c)
+        #     v = None if _is_blank(raw) else _parse_amount(raw)
+        #     if v is None:
+        #         issues.append(Issue("error", "BAD_AMOUNT", f"Unparseable amount {raw!r} in {c}", tid, d))
+        #         ok = False
+        #         break
+        #     if v < 0:
+        #         issues.append(Issue("error", "NEGATIVE_VALUE", f"Negative value in {c}", tid, d))
+        #         ok = False
+        #         break
+        #     rec[c] = v
+        # if ok:
+        #     out.append(rec)
         amounts = _parse_amount_cols(r, amount_cols, cell, issues, tid, d)
         if amounts is not None:
             out.append({"tid": tid, "date": d, **amounts})
@@ -241,6 +257,7 @@ def _finish_log(df, issues, frac, capacities):
     # derive = "withdrawal" not in df.columns or "replenishment" not in df.columns
     has_w, has_r = "withdrawal" in df.columns, "replenishment" in df.columns
     derive = not (has_w and has_r)
+    # if derive:
     if not has_w and not has_r:
         df = _derive(df, frac, capacities)
     elif not has_r:
@@ -298,6 +315,22 @@ def _read_master(body, cell, issues: list[Issue]) -> pd.DataFrame:
         if not tid:
             issues.append(Issue("error", "BAD_TID", "Missing tid"))
             continue
+        # rec: dict[str, Any] = {"tid": tid}
+        # ok = True
+        # for c in MASTER_INT:
+        #     raw = cell(r, c)
+        #     v = None if _is_blank(raw) else _parse_amount(raw)
+        #     if v is None:
+        #         issues.append(Issue("error", "BAD_AMOUNT", f"Unparseable value {raw!r} in {c}", tid))
+        #         ok = False
+        #         break
+        #     if v < 0:
+        #         issues.append(Issue("error", "NEGATIVE_VALUE", f"Negative value in {c}", tid))
+        #         ok = False
+        #         break
+        #     rec[c] = v
+        # if not ok:
+        #     continue
         amounts = _parse_amount_cols(r, MASTER_INT, cell, issues, tid)
         if amounts is None:
             continue
